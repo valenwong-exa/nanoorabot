@@ -13,8 +13,8 @@
 **特别是针对 Oracle 数据库的运维，本系统提供了深度的自动化管理、故障排查与诊断能力。**
 *Especially for Oracle database O&M, this system provides deep automated management, troubleshooting, and diagnostic capabilities.*
 
-**系统特别引入了 26ai 的向量库能力作为知识库，大幅增强了专业知识的检索准确度。**
-*The system specifically introduces the vector database capabilities of 26ai as its knowledge base MCP Server, significantly enhancing the retrieval accuracy professional knowledge.*
+**系统特别引入了Oracle 26ai 的向量库能力作为知识库，大幅增强了专业知识的检索准确度。**
+*The system specifically introduces the vector database capabilities of Oracle 26ai as its knowledge base MCP Server, significantly enhancing the retrieval accuracy professional knowledge.*
 
 **系统采用Oracle MCP Server作为Oracle数据库的访问工具**
 *The system specifically introduces Oracle MCP Server to access Oracle database.*
