@@ -8,8 +8,6 @@
 *This project is created and maintained by a senior DBA system architect, with development powered by vibe coding. Everyone is welcome to join in and do vibe coding together.
 
 
-
-
 **它面向主机管理、数据库管理和自动化运维场景，强调可扩展、可观测、可持续运行。**
 *It targets host management, database management, and automated operations and maintenance (O&M) scenarios, emphasizing scalability, observability, and sustainable operation.*
 
@@ -26,6 +24,7 @@
 *By integrating the architecture of AI, Tools, Memory, and Web UI, we have formed a practical Agent management platform.*
 
 <img width="1512" height="864" alt="image" src="https://github.com/user-attachments/assets/5c0918c8-34c7-49b8-ad38-479a9b99791b" />
+<img width="562" height="141" alt="image" src="https://github.com/user-attachments/assets/68138969-559e-4112-99d0-66f253aea434" />
 
 
 ## 核心特性 / Core Features
