@@ -42,7 +42,8 @@
 
 ## 主要特性 | Key Features
 
-### 删除记忆用法总结 | Memory Deletion Commands Summary
+### 删除记忆 | Memory Deletion Commands Summary
+* 因为运维机器人可能不需要记忆 Because OPS robot may not needs memory
 
 #### 删除命令 | Commands
 
