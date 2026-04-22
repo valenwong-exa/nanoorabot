@@ -51,7 +51,7 @@
 * [nanobot](https://github.com/frostming/nanobot)
 * [nanobot-webui](https://github.com/frostming/nanobot-webui)
 
-## 主要特性 | Key Features
+## 主要的 系统管理员 特性 | Key Features for SYSTEM Admin
 
 ### 删除记忆 | Memory Deletion Commands Summary
 * 因为运维机器人可能不需要记忆 Because OPS robot may not needs memory
