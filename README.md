@@ -56,61 +56,6 @@
 ### 删除记忆 | Memory Deletion Commands Summary
 * 因为运维机器人可能不需要记忆 Because OPS robot may not needs memory
 
-#### 删除命令 | Commands
-
-- 删除当前会话记忆：`/forget-session`  
-  Delete current session memory: `/forget-session`
-
-- 删除长期历史记忆：`/forget-history`  
-  Delete long-term memory: `/forget-history`
-
-- 两种一起删：`/forget-all`  
-  Delete both: `/forget-all`
-
-### 你也可以这样说 | You Can Also Say
-
-- 请调用 `/forget-session`  
-  Please run `/forget-session`
-
-- 请调用 `/forget-history`  
-  Please run `/forget-history`
-
-- 请调用 `/forget-all`  
-  Please run `/forget-all`
-
-### 自然语言也可以 | Natural Language Also Works
-
-- 忘记当前记忆  
-  Forget current memory
-
-- 清除当前记忆  
-  Clear current memory
-
-- 忘记历史记忆  
-  Forget historical memory
-
-- 清除长期记忆  
-  Clear long-term memory
-
-### 区别 | Differences
-
-- `/forget-session`：清掉当前这个对话的 session 记忆，只影响当前会话。  
-  `/forget-session`: Clears the session memory of the current conversation only. It affects only the current chat.
-
-- `/forget-history`：清掉长期记忆文件，包括 `memory/history.jsonl` 和 `memory/MEMORY.md`，并重置相关 cursor。  
-  `/forget-history`: Clears long-term memory files, including `memory/history.jsonl` and `memory/MEMORY.md`, and resets the related cursor.
-
-- `/forget-all`：同时清当前会话和长期记忆。  
-  `/forget-all`: Clears both current session memory and long-term memory.
-
-### 重要说明 | Important Notes
-
-- 现在不是单纯删文件，而是会同时清内存里的缓存状态，所以不会再出现“手工删了文件，过一会又被写回来”的情况。  
-  This now does more than just delete files. It also clears the in-memory cache state, so you will no longer see the situation where files are manually deleted and then written back again later.
-
-- 如果你想最稳，推荐直接用固定命令：`/forget-session`、`/forget-history`、`/forget-all`。  
-  For the most reliable result, it is recommended to use the fixed commands directly: `/forget-session`, `/forget-history`, `/forget-all`.
-
 ### 推荐场景 | Recommended Scenarios
 
 - 想让 AI 忘掉这次聊天上下文：`/forget-session`  
@@ -122,16 +67,11 @@
 - 想彻底重置：`/forget-all`  
   Want a full reset: `/forget-all`
 
-### 一句话版 | One-Line Summary
+  自然语言也可以工作| Nautal language works as well
 
-- 只忘当前聊天：`/forget-session`  
-  Forget only the current chat: `/forget-session`
-
-- 只忘长期历史：`/forget-history`  
-  Forget only long-term history: `/forget-history`
-
-- 全忘：`/forget-all`  
-  Forget everything: `/forget-all`
+- 只忘当前聊天：`forget current memory`  
+- 只忘长期历史：`忘记历史记忆`  
+- 全忘：`忘记所有记忆`  
 
 ## 可管理主机和数据库列表 | Server Host and Database list
 
