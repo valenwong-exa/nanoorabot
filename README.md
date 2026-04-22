@@ -20,8 +20,8 @@
 **系统采用Oracle MCP Server作为Oracle数据库的访问工具**
 *The system specifically introduces Oracle MCP Server to access Oracle database.*
 
-**通过整合 AI、工具 (Tool)、记忆 (Memory) 与 Web UI 的架构，我们形成了一个可落地的 Agent 管理平台。**
-*By integrating the architecture of AI, Tools, Memory, and Web UI, we have formed a practical Agent management platform.*
+**通过整合 AI、工具 (Tool)、记忆 (Memory) 与 Web UI 的架构，我们形成了一个可落地的 Agent 管理平台，但本项目在开发中，仅仅限于用于DEV或者UAT环境，如果用于生产环境，后果自负，本项目不承担任何责任。。**
+*By integrating the architecture of AI, Tools, Memory, and Web UI, we have formed a practical Agent management platform. This project is currently under development and is only intended for use in the DEV/UAT environment. If it is used in the production environment, the user shall bear all the consequences.This project assumes no responsibility.*
 
 <img width="1512" height="864" alt="image" src="https://github.com/user-attachments/assets/5c0918c8-34c7-49b8-ad38-479a9b99791b" />
 <img width="562" height="141" alt="image" src="https://github.com/user-attachments/assets/68138969-559e-4112-99d0-66f253aea434" />
