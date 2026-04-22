@@ -2,6 +2,8 @@
 
 **本项目是一个基于 `nanobot` 与 `nanobot-webui` 二次开发的 AI System Agent 机器人系统，目标是构建一个能够长期运行、具备自主执行能力的智能系统管理员。**
 *This project is an AI System Agent robot system developed based on `nanobot` and `nanobot-webui`, aiming to build an intelligent system administrator capable of long-term operation and autonomous execution.*
+<img width="1146" height="207" alt="image" src="https://github.com/user-attachments/assets/8d52e6c9-27e7-4bea-babc-9c2b76039435" />
+
 
 **它面向主机管理、数据库管理和自动化运维场景，强调可扩展、可观测、可持续运行。**
 *It targets host management, database management, and automated operations and maintenance (O&M) scenarios, emphasizing scalability, observability, and sustainable operation.*
