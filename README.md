@@ -4,6 +4,8 @@
 *This project is an AI System Agent robot system developed based on `nanobot` and `nanobot-webui`, aiming to build an intelligent system administrator capable of long-term operation and autonomous execution.*
 <img width="1146" height="207" alt="image" src="https://github.com/user-attachments/assets/8d52e6c9-27e7-4bea-babc-9c2b76039435" />
 
+*本项目由资深DBA系统架构师创建和维护，依赖vibe coding 创建。欢迎大家一起vide coding。
+*This project is created and maintained by a senior DBA system architect, with development powered by vibe coding. Everyone is welcome to join in and do vibe coding together.
 
 **它面向主机管理、数据库管理和自动化运维场景，强调可扩展、可观测、可持续运行。**
 *It targets host management, database management, and automated operations and maintenance (O&M) scenarios, emphasizing scalability, observability, and sustainable operation.*
