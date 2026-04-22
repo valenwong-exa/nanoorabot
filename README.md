@@ -133,6 +133,11 @@
 - 全忘：`/forget-all`  
   Forget everything: `/forget-all`
 
+## 可管理主机和数据库列表 | Server Host and Database list
+
+<img width="2308" height="892" alt="image" src="https://github.com/user-attachments/assets/7b117288-e4c2-490d-89a1-cef99e613786" />
+
+
 ## 许可证 / License
 
 **本项目采用 MIT 许可证开源。**
