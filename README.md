@@ -41,6 +41,7 @@
 
 **本项目的基础能力得益于以下优秀的开源项目：**
 *The foundational capabilities of this project benefit from the following excellent open-source projects:*
+<img width="862" height="171" alt="image" src="https://github.com/user-attachments/assets/91743b2a-474b-47e2-b0a8-dc6e85a2f1e7" />
 
 * [nanobot](https://github.com/frostming/nanobot)
 * [nanobot-webui](https://github.com/frostming/nanobot-webui)
