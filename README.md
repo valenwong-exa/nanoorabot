@@ -22,7 +22,7 @@
 **通过整合 AI、工具 (Tool)、记忆 (Memory) 与 Web UI 的架构，我们形成了一个可落地的 Agent 管理平台。**
 *By integrating the architecture of AI, Tools, Memory, and Web UI, we have formed a practical Agent management platform.*
 
-![Uploading image.png…]()
+<img width="1512" height="864" alt="image" src="https://github.com/user-attachments/assets/5c0918c8-34c7-49b8-ad38-479a9b99791b" />
 
 
 ## 核心特性 / Core Features
