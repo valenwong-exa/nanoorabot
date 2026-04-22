@@ -22,6 +22,9 @@
 **通过整合 AI、工具 (Tool)、记忆 (Memory) 与 Web UI 的架构，我们形成了一个可落地的 Agent 管理平台。**
 *By integrating the architecture of AI, Tools, Memory, and Web UI, we have formed a practical Agent management platform.*
 
+![Uploading image.png…]()
+
+
 ## 核心特性 / Core Features
 
 * **自主运行的系统管理员 / Autonomous System Administrator**: 
