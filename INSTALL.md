@@ -414,12 +414,10 @@ nanobot webui start --host 127.0.0.1 --port 18780 --workspace E:\nanobot-runtime
 - 配置文件路径
 - 端口号
 
-## 12. 发布包维护建议
+## 12. 登录
 
-每次准备对外复制源码包前，建议先做以下动作：
+默认密码 admin/nanobot
 
-1. 确认 `nanobot-webui-main` 已只引用 `0.1.5.post1`
-2. 前端构建至少本地通过一次
-3. 不把 `.venv`、`node_modules`、`__pycache__`、`dist`、`build`、`runtime` 打进发布包
-4. 一起附带本 `INSTALL.md`
-5. 使用根目录的 `backup_release_code.bat` 生成发布包目录
+## 13. 申请API KEY
+
+自行申请API KEY 配置并使用
