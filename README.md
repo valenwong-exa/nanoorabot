@@ -7,7 +7,6 @@
 *本项目由资深DBA系统架构师创建和维护，依赖vibe coding 创建。欢迎大家一起vide coding。
 *This project is created and maintained by a senior DBA system architect, with development powered by vibe coding. Everyone is welcome to join in and do vibe coding together.
 
-
 **它面向主机管理、数据库管理和自动化运维场景，强调可扩展、可观测、可持续运行。**
 *It targets host management, database management, and automated operations and maintenance (O&M) scenarios, emphasizing scalability, observability, and sustainable operation.*
 
@@ -22,9 +21,11 @@
 
 **通过整合 AI、工具 (Tool)、记忆 (Memory) 与 Web UI 的架构，我们形成了一个可落地的 Agent 管理平台，但本项目在开发中，仅仅限于用于DEV或者UAT环境，如果用于生产环境，后果自负，本项目不承担任何责任。。**
 *By integrating the architecture of AI, Tools, Memory, and Web UI, we have formed a practical Agent management platform. This project is currently under development and is only intended for use in the DEV/UAT environment. If it is used in the production environment, the user shall bear all the consequences.This project assumes no responsibility.*
+**目前本项目仅仅测试了KIMI和Deepseek API*
+**Currently we just tested with KIMI and Deepseek API*
 
 <img width="1512" height="864" alt="image" src="https://github.com/user-attachments/assets/5c0918c8-34c7-49b8-ad38-479a9b99791b" />
-<img width="562" height="141" alt="image" src="https://github.com/user-attachments/assets/68138969-559e-4112-99d0-66f253aea434" />
+
 
 
 ## 核心特性 / Core Features
