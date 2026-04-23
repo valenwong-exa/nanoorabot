@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Oracle Agenda Slide Template</title>
+    <style>
+        /* =========================================================
+       Oracle-style HTML Slide Template - Agenda / TOC Page
+       Purpose:
+       - Used for agenda / table of content slide
+       - AI should preserve the layout and only replace text items
+       - 16:9 fixed canvas
+       ========================================================= */
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #1b1b1b;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        /* =========================================================
+       Slide canvas
+       ========================================================= */
+.slide {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+        /* =========================================================
+       Background layer
+       Usage rules for AI:
+       1. If a background image is provided, place it here
+       2. Otherwise use a solid color background
+       3. Do NOT place text in this layer
+       ========================================================= */
+        .bg-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+
+            /* Put background image here if needed */
+             background-image: url('agenda.png');
+         background-size: cover;
+         background-position: center;
+         background-repeat: no-repeat;
+      
+
+            /* Default agenda background */
+            /* background-color: #003b49; */
+        }
+
+        /* =========================================================
+       Optional overlay layer
+       - Use only if background image affects readability
+       ========================================================= */
+        .bg-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+
+            /* Example:
+      background: rgba(0, 0, 0, 0.05);
+      */
+        }
+
+        /* =========================================================
+       Foreground content layer
+       ========================================================= */
+        .content-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+        }
+
+        /* =========================================================
+       Main content region
+       Layout intent:
+       - Agenda title on top-left
+       - List items arranged vertically below
+       - Large empty area on right side can be kept clean
+       ========================================================= */
+        .content {
+            position: absolute;
+            left: calc(105px + 15vw);
+            top: calc(180px + 5vh);
+            width: 1280px;
+        }
+
+        .header-block {
+            position: absolute;
+            left: calc(10px + 5vw);
+            top: calc(24px + 5vh);
+            width: 1280px;
+        }
+
+        /* =========================================================
+       Section title
+       Usage rules for AI:
+       - Usually short, e.g. "Agenda" / "Table of Content"
+       - Keep one line if possible
+       ========================================================= */
+        .section-title {
+            font-size: 66px;
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: -0.5px;
+            margin-bottom: 0;
+            color: #ffffff;
+        }
+
+        /* =========================================================
+       Agenda list
+       Usage rules for AI:
+       1. Prefer 5-9 items
+       2. Each item should be concise
+       3. Keep wording parallel in style
+       4. Avoid overly long text
+       5. If an item is too long, shorten content first
+       ========================================================= */
+        .agenda-list {
+            list-style: none;
+            width: 1180px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .agenda-item {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            padding: 12px 18px;
+            color: rgba(255, 255, 255, 0.96);
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            background: rgba(6, 24, 35, 0.36);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(2px);
+        }
+
+        /* =========================================================
+       Agenda number
+       Usage rules:
+       - Fixed-width block for visual alignment
+       - Keep numbers short like 1. 2. 3.
+       ========================================================= */
+        .agenda-num {
+            width: 44px;
+            height: 44px;
+            flex: 0 0 44px;
+            border-radius: 999px;
+            font-size: 24px;
+            font-weight: 700;
+            line-height: 44px;
+            text-align: center;
+            color: rgba(255, 222, 197, 0.98);
+            background: rgba(213, 111, 63, 0.2);
+            border: 1px solid rgba(255, 183, 142, 0.45);
+        }
+
+        /* =========================================================
+       Agenda text
+       Usage rules:
+       - Main agenda wording
+       - Keep one line when possible
+       - Use sentence-style capitalization or title style consistently
+       ========================================================= */
+        .agenda-text {
+            font-size: 35px;
+            font-weight: 500;
+            line-height: 1.28;
+            max-width: 1100px;
+            word-break: break-word;
+            color: rgba(248, 252, 255, 0.98);
+        }
+
+        /* =========================================================
+       Bottom-left footer
+       Usage rules:
+       - Usually fixed legal/copyright/footer text
+       - Can be replaced or hidden if needed
+       ========================================================= */
+        .footer-left {
+            position: absolute;
+            left: 105px;
+            bottom: 22px;
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.65);
+            line-height: 1;
+        }
+
+ 
+
+        /* =========================================================
+       Optional utility classes for AI use
+       ========================================================= */
+        .hide {
+            display: none;
+        }
+
+        .empty {
+            visibility: hidden;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- =======================================================
+       SLIDE_METADATA
+       slide_type: agenda
+       theme: oracle executive
+       layout: left_title_left_list
+       background_style: image_or_solid
+       right_side_reserved_for_whitespace: true
+       agenda_count_recommended: 5_to_9
+       footer_optional: true
+       ======================================================= -->
+
+    <!-- =======================================================
+       AI editing rules:
+       1. Keep overall layout unchanged
+       2. Replace section title and agenda items only
+       3. Do not add large paragraphs or charts on this page
+       4. Keep agenda items concise and parallel in wording style
+       5. Preserve left alignment and generous spacing
+       6. Background can be image or solid color
+       ======================================================= -->
+
+    <div class="slide">
+        <!-- Background layer -->
+        <div class="bg-layer"></div>
+
+        <!-- Optional overlay -->
+        <div class="bg-overlay"></div>
+
+        <!-- Foreground content -->
+        <div class="content-layer">
+            <div class="header-block">
+                <div class="section-title">Table of Content</div>
+            </div>
+            <div class="content">
+                <ul class="agenda-list">
+                    <li class="agenda-item">
+                        <div class="agenda-num">1.</div>
+                        <div class="agenda-text">Easy Access to High Availability</div>
+                    </li>
+
+                    <li class="agenda-item">
+                        <div class="agenda-num">2.</div>
+                        <div class="agenda-text">Pluggable Database Integration</div>
+                    </li>
+
+                    <li class="agenda-item">
+                        <div class="agenda-num">3.</div>
+                        <div class="agenda-text">Tackling Planned Maintenance</div>
+                    </li>
+
+                    <li class="agenda-item">
+                        <div class="agenda-num">4.</div>
+                        <div class="agenda-text">Better High Availability – Unplanned Events</div>
+                    </li>
+
+                    <li class="agenda-item">
+                        <div class="agenda-num">5.</div>
+                        <div class="agenda-text">Scale Availability</div>
+                    </li>
+
+                    <li class="agenda-item">
+                        <div class="agenda-num">6.</div>
+                        <div class="agenda-text">More and Efficient Workload Support</div>
+                    </li>
+
+                    <li class="agenda-item">
+                        <div class="agenda-num">7.</div>
+                        <div class="agenda-text">Summary</div>
+                    </li>
+
+                    <li class="agenda-item">
+                        <div class="agenda-num">8.</div>
+                        <div class="agenda-text">Appendix – Overview slides with notes</div>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Optional footer -->
+            <div class="footer-left">Copyright © 2024, Oracle and/or its affiliates.</div>
+
+ 
+        </div>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Oracle Content Slide Template</title>
+  <style>
+    /* =========================================================
+       Oracle-style HTML Slide Template - Single Content Page
+       Purpose:
+       - Used for normal body/content slides
+       - Supports title, subtitle, paragraph, and up to 3 list levels
+      - AI can adapt layout structure based on content needs
+       - Background image uses page.png
+       ========================================================= */
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: #1b1b1b;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, Helvetica, sans-serif;
+    }
+
+    /* =========================================================
+       Slide canvas
+       - Fixed 16:9 layout
+       ========================================================= */
+.slide {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+    .bg-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background-image: url('page.png');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-color: #003b49;
+    }
+
+    .bg-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .content-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+    }
+
+    .confidential-top {
+      position: absolute;
+      left: 0px;
+      top: 12px;
+      font-size: 18px;
+      color: rgba(255, 255, 255, 0.60);
+      font-weight: 400;
+      line-height: 1;
+    }
+
+    .content {
+      position: absolute;
+      left: 96px;
+      right: 96px;
+      top: calc(220px + 4vh);
+      width: auto;
+    }
+
+    .header-block {
+      position: absolute;
+      left: 96px;
+      top: 86px;
+      width: 1100px;
+    }
+
+    .title {
+      font-size: 62px;
+      font-weight: 700;
+      line-height: 1.12;
+      letter-spacing: -0.3px;
+      color: rgba(255, 250, 244, 0.98);
+      margin-bottom: 12px;
+      max-width: 1100px;
+      text-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
+    }
+
+    .subtitle {
+      font-size: 36px;
+      font-weight: 400;
+      line-height: 1.2;
+      color: rgba(218, 238, 255, 0.95);
+      margin-bottom: 0;
+      max-width: 1100px;
+    }
+
+    .body-content {
+      width: 100%;
+      height: 780px;
+      color: rgba(255, 255, 255, 0.96);
+      padding: 16px 20px;
+      border-radius: 16px;
+      background: rgba(5, 24, 35, 0.26);
+      border: none;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+      backdrop-filter: blur(2px);
+      overflow: visible;
+    }
+
+    .list-level-1,
+    .list-level-2,
+    .list-level-3 {
+      list-style-position: outside;
+      color: rgba(255, 255, 255, 0.96);
+    }
+
+    .list-level-1 {
+      margin-left: 48px;
+      margin-top: 8px;
+      margin-bottom: 0;
+    }
+
+    .list-level-1 > li {
+      font-size: 31px;
+      font-weight: 500;
+      line-height: 1.26;
+      margin-bottom: 8px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .list-level-2 {
+      margin-top: 8px;
+      margin-left: 34px;
+      margin-bottom: 2px;
+    }
+
+    .list-level-2 > li {
+      font-size: 26px;
+      font-weight: 400;
+      line-height: 1.28;
+      margin-bottom: 6px;
+      padding-left: 6px;
+      color: rgba(228, 242, 255, 0.94);
+    }
+
+    .list-level-3 {
+      margin-top: 6px;
+      margin-left: 30px;
+      margin-bottom: 0;
+    }
+
+    .list-level-3 > li {
+      font-size: 22px;
+      font-weight: 400;
+      line-height: 1.26;
+      margin-bottom: 4px;
+      padding-left: 4px;
+      color: rgba(210, 233, 248, 0.92);
+    }
+
+    .footer-left {
+      position: absolute;
+      left: 145px;
+      bottom: 18px;
+      font-size: 16px;
+      line-height: 1;
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    .confidential-bottom {
+      position: absolute;
+      left: 0px;
+      bottom: 6px;
+      font-size: 18px;
+      color: rgba(255, 255, 255, 0.60);
+      font-weight: 400;
+      line-height: 1;
+    }
+
+    .swot-layout {
+      position: relative;
+      height: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 46px 52px;
+      align-items: stretch;
+    }
+
+    .swot-divider-vertical {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      height: 70vh;
+      width: 2px;
+      transform: translate(-1px, -50%);
+      background: rgba(255, 255, 255, 0.38);
+      border-radius: 1px;
+    }
+
+    .swot-divider-horizontal {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 85%;
+      height: 2px;
+      transform: translate(-50%, -1px);
+      background: rgba(255, 255, 255, 0.38);
+      border-radius: 1px;
+    }
+
+    .swot-box {
+      padding: 14px 18px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(6, 24, 35, 0.34);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+      overflow-y: auto;
+    }
+
+    .swot-title {
+      font-size: 33px;
+      font-weight: 600;
+      line-height: 1.2;
+      color: rgba(255, 250, 244, 0.98);
+      margin-bottom: 14px;
+    }
+
+    .swot-list {
+      margin-left: 34px;
+      margin-top: 0;
+    }
+
+    .hide {
+      display: none;
+    }
+
+    .empty {
+      visibility: hidden;
+    }
+  </style>
+</head>
+<body>
+  <!-- =======================================================
+       SLIDE_METADATA
+       slide_type: single_content
+       theme: oracle executive
+       layout: swot_2x2
+       background_image: page.png
+       supports_paragraph: true
+       supports_list_levels: 3
+       page_number_optional: true
+       footer_optional: true
+       ======================================================= -->
+
+  <div class="slide">
+    <div class="bg-layer"></div>
+    <div class="bg-overlay"></div>
+
+    <div class="content-layer">
+ 
+
+      <div class="header-block">
+        <div class="title">Title</div>
+        <div class="subtitle">subtitle</div>
+      </div>
+
+      <div class="content">
+        <div class="body-content">
+          <div class="swot-layout">
+            <div class="swot-divider-vertical"></div>
+            <div class="swot-divider-horizontal"></div>
+            <section class="swot-box">
+              <div class="swot-title">Strengths</div>
+              <ul class="list-level-1 swot-list">
+                <li>Proven architecture with strong uptime history.</li>
+                <li>Clear governance model and ownership boundaries.</li>
+                <li>Experienced platform and operations team.</li>
+              </ul>
+            </section>
+            <section class="swot-box">
+              <div class="swot-title">Weaknesses</div>
+              <ul class="list-level-1 swot-list">
+                <li>Manual release checkpoints still exist.</li>
+                <li>Cross-team dependency mapping is incomplete.</li>
+                <li>Current rollback rehearsal cadence is low.</li>
+              </ul>
+            </section>
+            <section class="swot-box">
+              <div class="swot-title">Opportunities</div>
+              <ul class="list-level-1 swot-list">
+                <li>Expand automation to reduce delivery friction.</li>
+                <li>Standardize observability across all environments.</li>
+                <li>Drive predictable scale through platform patterns.</li>
+              </ul>
+            </section>
+            <section class="swot-box">
+              <div class="swot-title">Threats</div>
+              <ul class="list-level-1 swot-list">
+                <li>Frequent upgrades may increase operational risk.</li>
+                <li>External integration changes can disrupt timelines.</li>
+                <li>Talent constraints can slow transformation speed.</li>
+              </ul>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

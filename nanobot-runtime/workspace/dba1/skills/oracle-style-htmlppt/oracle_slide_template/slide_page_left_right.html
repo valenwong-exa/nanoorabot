@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Oracle Content Slide Template</title>
+  <style>
+    /* =========================================================
+       Oracle-style HTML Slide Template - Single Content Page
+       Purpose:
+       - Used for normal body/content slides
+       - Supports title, subtitle, paragraph, and up to 3 list levels
+      - AI can adapt layout structure based on content needs
+       - Background image uses page.png
+       ========================================================= */
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: #1b1b1b;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, Helvetica, sans-serif;
+    }
+
+    /* =========================================================
+       Slide canvas
+       - Fixed 16:9 layout
+       ========================================================= */
+.slide {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+    /* =========================================================
+       Background layer
+       Usage rules for AI:
+       1. Keep page.png as the default background image
+       2. Do not place text in this layer
+       3. If background must be changed, preserve readability
+       ========================================================= */
+    .bg-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+
+      background-image: url('page.png');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+
+      /* fallback color */
+      background-color: #003b49;
+    }
+
+    /* =========================================================
+       Optional overlay
+       - Keep empty unless text readability needs improvement
+       ========================================================= */
+    .bg-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+
+      /* Example:
+      background: rgba(0, 0, 0, 0.04);
+      */
+    }
+
+    /* =========================================================
+       Foreground content layer
+       ========================================================= */
+    .content-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+    }
+
+    /* =========================================================
+       Top confidential label
+       ========================================================= */
+    .confidential-top {
+      position: absolute;
+      left: 0px;
+      top: 12px;
+      font-size: 18px;
+      color: rgba(255, 255, 255, 0.60);
+      font-weight: 400;
+      line-height: 1;
+    }
+
+    /* =========================================================
+       Main text content area
+       Layout intent:
+       - Text aligned left
+       - Large open area remains for clean executive layout
+       - Avoid filling the whole page with dense text
+       ========================================================= */
+    .content {
+      position: absolute;
+      left: 96px;
+      right: 96px;
+      top: calc(220px + 4vh);
+      width: auto;
+    }
+
+    .header-block {
+      position: absolute;
+      left: 96px;
+      top: 86px;
+      width: 1100px;
+    }
+
+    /* =========================================================
+       Title
+       Usage rules for AI:
+       - Main section title
+       - Usually short
+       - Prefer 1 line, max 2 lines
+       ========================================================= */
+    .title {
+      font-size: 62px;
+      font-weight: 700;
+      line-height: 1.12;
+      letter-spacing: -0.3px;
+      color: rgba(255, 250, 244, 0.98);
+      margin-bottom: 12px;
+      max-width: 1100px;
+      text-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
+    }
+
+    /* =========================================================
+       Subtitle
+       Usage rules for AI:
+       - Short supporting phrase under title
+       - Can be empty if not needed
+       - Smaller than title
+       ========================================================= */
+    .subtitle {
+      font-size: 36px;
+      font-weight: 400;
+      line-height: 1.2;
+      color: rgba(218, 238, 255, 0.95);
+      margin-bottom: 0;
+      max-width: 1100px;
+    }
+
+    /* =========================================================
+       Body block
+       Usage rules for AI:
+       - Contains paragraph text and/or lists
+       - Keep wording concise
+       - Avoid large dense paragraphs
+       ========================================================= */
+    .body-content {
+      width: 100%;
+      height: 780px;
+      color: rgba(255, 255, 255, 0.96);
+      padding: 16px 20px;
+      border-radius: 16px;
+      background: rgba(5, 24, 35, 0.26);
+      border: none;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+      backdrop-filter: blur(2px);
+      overflow: visible;
+    }
+
+    /* =========================================================
+       Intro paragraph
+       Usage rules:
+       - Use for key summary statement
+       - Usually 1-3 lines
+       - May be omitted if slide is list-only
+       ========================================================= */
+    .intro {
+      font-size: 33px;
+      font-weight: 400;
+      line-height: 1.26;
+      margin-bottom: 16px;
+      max-width: 1500px;
+      color: rgba(240, 248, 255, 0.97);
+    }
+
+    /* =========================================================
+       List base styles
+       AI rules:
+       - Support up to 3 levels only
+       - Each level must use smaller font than previous level
+       - Keep bullet structure clear and readable
+       - Prefer short bullet items
+       ========================================================= */
+    .list-level-1,
+    .list-level-2,
+    .list-level-3 {
+      list-style-position: outside;
+      color: rgba(255, 255, 255, 0.96);
+    }
+
+    /* =========================================================
+       Level 1 list
+       - Main bullet points
+       ========================================================= */
+    .list-level-1 {
+      margin-left: 48px;
+      margin-top: 8px;
+      margin-bottom: 0;
+    }
+
+    .list-level-1 > li {
+      font-size: 31px;
+      font-weight: 500;
+      line-height: 1.26;
+      margin-bottom: 8px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    /* =========================================================
+       Level 2 list
+       - Secondary bullet points under level 1
+       ========================================================= */
+    .list-level-2 {
+      margin-top: 8px;
+      margin-left: 34px;
+      margin-bottom: 2px;
+    }
+
+    .list-level-2 > li {
+      font-size: 26px;
+      font-weight: 400;
+      line-height: 1.28;
+      margin-bottom: 6px;
+      padding-left: 6px;
+      color: rgba(228, 242, 255, 0.94);
+    }
+
+    /* =========================================================
+       Level 3 list
+       - Tertiary bullet points under level 2
+       - Use sparingly
+       ========================================================= */
+    .list-level-3 {
+      margin-top: 6px;
+      margin-left: 30px;
+      margin-bottom: 0;
+    }
+
+    .list-level-3 > li {
+      font-size: 22px;
+      font-weight: 400;
+      line-height: 1.26;
+      margin-bottom: 4px;
+      padding-left: 4px;
+      color: rgba(210, 233, 248, 0.92);
+    }
+
+    /* =========================================================
+       Footer area
+       ========================================================= */
+ 
+
+    .footer-left {
+      position: absolute;
+      left: 145px;
+      bottom: 18px;
+      font-size: 16px;
+      line-height: 1;
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    .confidential-bottom {
+      position: absolute;
+      left: 0px;
+      bottom: 6px;
+      font-size: 18px;
+      color: rgba(255, 255, 255, 0.60);
+      font-weight: 400;
+      line-height: 1;
+    }
+
+    .columns-layout {
+      position: relative;
+      height: 100%;
+      display: flex;
+      align-items: stretch;
+      justify-content: space-between;
+      gap: 56px;
+    }
+
+    .column-divider {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      height: 70vh;
+      width: 2px;
+      transform: translate(-1px, -50%);
+      background: rgba(255, 255, 255, 0.38);
+      border-radius: 1px;
+    }
+
+    .column-box {
+      width: calc(50% - 28px);
+      height: 100%;
+      padding: 14px 18px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(6, 24, 35, 0.34);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+      overflow-y: auto;
+    }
+
+    .column-title {
+      font-size: 33px;
+      font-weight: 600;
+      line-height: 1.2;
+      color: rgba(255, 250, 244, 0.98);
+      margin-bottom: 14px;
+    }
+
+    .column-list {
+      margin-left: 34px;
+      margin-top: 0;
+    }
+
+    /* =========================================================
+       Utility classes
+       ========================================================= */
+    .hide {
+      display: none;
+    }
+
+    .empty {
+      visibility: hidden;
+    }
+  </style>
+</head>
+<body>
+  <!-- =======================================================
+       SLIDE_METADATA
+       slide_type: single_content
+       theme: oracle executive
+       layout: left_right_columns
+       background_image: page.png
+       supports_paragraph: true
+       supports_list_levels: 3
+       page_number_optional: true
+       footer_optional: true
+       ======================================================= -->
+
+  <div class="slide">
+    <div class="bg-layer"></div>
+    <div class="bg-overlay"></div>
+
+    <div class="content-layer">
+ 
+
+      <div class="header-block">
+        <div class="title">Title</div>
+        <div class="subtitle">subtitle</div>
+      </div>
+
+      <div class="content">
+        <div class="body-content">
+          <div class="columns-layout">
+            <div class="column-divider"></div>
+            <div class="column-box">
+              <div class="column-title">Current State</div>
+              <ul class="list-level-1 column-list">
+                <li>Core systems rely on manual operation windows.</li>
+                <li>Upgrade coordination requires cross-team handoffs.</li>
+                <ul class="list-level-2">
+                  <li>during increasingly frequent software upgrades.</li>
+                </ul>
+                <li>Rollback planning is time-consuming and risk-sensitive.</li>
+                <ul class="list-level-2">
+                  <li>during increasingly frequent software upgrades.</li>
+                </ul>
+                <li>Rollback planning is time-consuming and risk-sensitive.</li>
+                <li>Rollback planning is time-consuming and risk-sensitive.</li>
+                <li>Rollback planning is time-consuming and risk-sensitive.</li>
+                <li>Rollback planning is time-consuming and risk-sensitive.</li>
+
+              </ul>
+            </div>
+            <div class="column-box">
+              <div class="column-title">Target State</div>
+              <ul class="list-level-1 column-list">
+                <li>Adopt automated rolling updates with zero downtime.</li>
+                <li>Standardize execution with reusable release runbooks.</li>
+                <li>Improve resilience through real-time fallback capability.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

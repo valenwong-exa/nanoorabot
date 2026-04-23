@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Oracle Section Title Slide Template</title>
+    <style>
+        /* =========================================================
+       Oracle-style HTML Slide Template - Section Title Page
+       Purpose:
+       - Used for section divider / appendix title / selection title slides
+       - Focus on a large title and optional subhead callout box
+       - AI should preserve layout and only replace text
+       - Background image uses page.png
+       ========================================================= */
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #1b1b1b;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        /* =========================================================
+       Slide canvas
+       ========================================================= */
+.slide {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+        /* =========================================================
+       Background layer
+       Usage rules for AI:
+       1. Keep page.png as default background
+       2. Do not place text inside this layer
+       3. Background is decorative only
+       ========================================================= */
+        .bg-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+
+            background-image: url('section_title.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-color: #003b49;
+        }
+
+        /* =========================================================
+       Optional overlay layer
+       - Use only if readability requires it
+       ========================================================= */
+        .bg-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+
+            /* Example:
+      background: rgba(0, 0, 0, 0.04);
+      */
+        }
+
+        /* =========================================================
+       Foreground content layer
+       ========================================================= */
+        .content-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+        }
+
+        /* =========================================================
+       Confidential labels
+       ========================================================= */
+        .confidential-top {
+            position: absolute;
+            left: 0px;
+            top: 12px;
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.60);
+            font-weight: 400;
+            line-height: 1;
+        }
+
+        .confidential-bottom {
+            position: absolute;
+            left: 0px;
+            bottom: 6px;
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.60);
+            font-weight: 400;
+            line-height: 1;
+        }
+
+        /* =========================================================
+       Main title region
+       Layout intent:
+       - Title block sits in left-middle area
+       - Large whitespace is preserved
+       - Title is the visual focus
+       ========================================================= */
+        .hero {
+            position: absolute;
+            left: calc(68px + 10vw);
+            top: 338px;
+            width: 980px;
+        }
+
+        /* =========================================================
+       Main title
+       Usage rules for AI:
+       1. Usually 2-3 lines
+       2. Insert <br> manually for visual balance
+       3. Prefer concise executive wording
+       4. If title is too long, shorten wording before reducing font
+       ========================================================= */
+        .title {
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 78px;
+            line-height: 1.06;
+            font-weight: 400;
+            letter-spacing: -0.6px;
+            color: #ffffff;
+            max-width: 920px;
+            margin-bottom: 30px;
+        }
+
+        /* =========================================================
+       Accent line
+       - Decorative separator below title
+       ========================================================= */
+        .accent-line {
+            width: 40px;
+            height: 6px;
+            background: #d9ad58;
+            margin-bottom: 34px;
+        }
+
+        /* =========================================================
+       Subhead box
+       Usage rules for AI:
+       1. Optional
+       2. Use for a short supporting statement only
+       3. Keep to 1-2 lines when possible
+       4. Can be hidden completely if not needed
+       ========================================================= */
+        .subhead-box {
+            width: 845px;
+            min-height: 102px;
+            border: 0px solid rgba(255, 255, 255, 0.65);
+            padding: 14px 18px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+ 
+        }
+
+        .subhead-text {
+            font-size: 28px;
+            line-height: 1.25;
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.96);
+            max-width: 760px;
+        }
+
+ 
+
+        /* =========================================================
+       Utility classes
+       ========================================================= */
+        .hide {
+            display: none;
+        }
+
+        .empty {
+            visibility: hidden;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- =======================================================
+       SLIDE_METADATA
+       slide_type: section_title
+       theme: oracle executive
+       layout: left_hero_title_with_subhead_box
+       background_image: page.png
+       title_required: true
+       subhead_optional: true
+       accent_line_required: true
+       ======================================================= -->
+
+    <!-- =======================================================
+       AI editing rules:
+       1. Keep overall layout unchanged
+       2. This slide is for section divider / appendix / chapter title
+       3. Title is the main visual focus
+       4. Title should usually be 2-3 lines
+       5. Add <br> manually for balanced line lengths
+       6. Subhead box is optional and should stay short
+       7. Do not add bullets, tables, or dense body text
+       8. Preserve large whitespace and simple structure
+       ======================================================= -->
+
+    <div class="slide">
+        <!-- Background -->
+        <div class="bg-layer"></div>
+
+        <!-- Optional overlay -->
+        <div class="bg-overlay"></div>
+
+        <!-- Foreground -->
+        <div class="content-layer">
+            <!-- <div class="confidential-top">Confidential - Oracle Restricted</div> -->
+
+            <div class="hero">
+                <!--
+          Main title:
+          - Best with 2-3 lines
+          - Insert <br> manually
+        -->
+                <div class="title">
+                    Appendix – Overview<br>
+                    slides with notes
+                </div>
+
+                <!-- Decorative accent line -->
+                <div class="accent-line"></div>
+
+                <!--
+          Optional subhead box:
+          - Keep short
+          - Hide whole block if unused
+        -->
+                <div class="subhead-box">
+                    <div class="subhead-text">Subhead goes here.</div>
+                </div>
+            </div>
+
+    
+            <!-- <div class="confidential-bottom">Confidential - Oracle Restricted</div> -->
+        </div>
+    </div>
+</body>
+
+</html>
