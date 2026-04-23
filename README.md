@@ -51,6 +51,11 @@
 * [nanobot](https://github.com/frostming/nanobot)
 * [nanobot-webui](https://github.com/frostming/nanobot-webui)
 
+## 内置第一个AI系统管理员 Danny | Buildin the first AI system administrator Danny
+
+<img width="2285" height="778" alt="image" src="https://github.com/user-attachments/assets/47aa3a7c-0932-44ce-936f-5fe3003d96ca" />
+
+
 ## 主要的 系统管理员 特性 | Key Features for SYSTEM Admin
 
 ### 删除记忆 | Memory Deletion Commands Summary
