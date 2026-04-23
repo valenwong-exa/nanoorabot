@@ -77,6 +77,22 @@
 
 <img width="2308" height="892" alt="image" src="https://github.com/user-attachments/assets/7b117288-e4c2-490d-89a1-cef99e613786" />
 
+## AI交付记录审计存储在26ai数据库
+
+## 数据库和主机危险命令防御
+
+## 内置Oracle SkiLL
+
+来自AI Data Flatform 团队整理
+
+感谢整理和提供
+https://github.com/krisrice/oracle-db-skills
+
+## DBA routine work SOP
+
+## 基于Oracle 26ai的RAG文档维护和向量搜索功能
+
+## 连接Oracle MCP Server
 
 ## 许可证 / License
 
