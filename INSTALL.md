@@ -1,3 +1,43 @@
+# 建议的安装方法 / Recommended Installation Method
+
+## 前置要求 / Prerequisites
+
+建议自行提前安装好以下环境：  
+It is recommended to install the following environments beforehand:
+
+```powershell
+C:\Users\Administrator&gt; python --version
+Python 3.12.0
+
+C:\Users\Administrator&gt; node --version
+v24.4.1
+
+C:\Users\Administrator&gt; npm --version
+11.11.0
+
+C:\Users\Administrator&gt; conda --version
+conda 24.7.1
+```
+
+## 项目配置 / Project Configuration
+
+1. **指定主目录 / Set the Home Directory**  
+   指定好项目的主目录路径。  
+   Specify the home directory path for your project.
+
+2. **提供环境信息 / Provide Environment Info**  
+   将上述环境信息告知 AI，并明确确认你要使用 **uv** 还是 **conda** 作为包管理工具。  
+   Share the above environment details with the AI, and explicitly confirm whether you want to use **uv** or **conda** as your package manager.
+
+3. **制定安装步骤 / Generate Installation Steps**  
+   让 AI 阅读项目的 `README` 文件后，为你制定详细的安装步骤。  
+   Have the AI read the project's `README` and formulate detailed installation steps for you.
+
+## 使用 Vibe Coding 工具 / Using Vibe Coding Tools
+
+如果你正在使用 vibe coding 工具，直接让 AI 工具帮你完成安装即可。  
+If you are using a vibe coding tool, simply let the AI tool handle the installation for you.
+
 # 安装与启动说明
 
 本文档面向一台全新的 Windows 机器，说明如何从当前源码包正确安装并启动项目。
