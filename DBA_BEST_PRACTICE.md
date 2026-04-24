@@ -148,6 +148,11 @@ SQL>
 
 #### 5. 导入并测试更多 Oracle Database Skills
 
+做为一个DBA，你现在已经完成两个关键步骤
+
+1. 可以用win ssh tool连接到linux，运行任意命令
+2. 可以用oracle sqlcl MCP server连接到数据库，运行命令
+
 完成以上步骤后，就可以继续导入并测试更多 Oracle Database 相关的 Skills。
 
 ---
