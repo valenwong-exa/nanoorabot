@@ -22,6 +22,103 @@ Oracle DBA 快速起步 / Best Start for Oracle DBA
 
 其值应指向 `openssh-win64` 的解压目录。
 
+#### 创建 SSH Private Key 并配置免密登录
+
+在 Windows 本地生成 key
+
+在 CMD 中执行：
+
+```cmd
+cd /d E:\OpenSSH-Win64
+
+E:\OpenSSH-Win64\ssh-keygen.exe -t ed25519 -f E:\OpenSSH-Win64\linux118.key -C "oracle@192.168.56.118"
+```
+
+如果不想输入 passphrase，连续回车两次即可。
+
+生成后会得到两个文件：
+
+```text
+E:\OpenSSH-Win64\linux118.key       -- private key，本地保留
+E:\OpenSSH-Win64\linux118.key.pub   -- public key，需要放到 Linux
+```
+
+#### 将 public key 写入 Linux 的 authorized_keys
+
+在 CMD 中执行：
+
+```cmd
+type E:\OpenSSH-Win64\linux118.key.pub | E:\OpenSSH-Win64\ssh.exe oracle@192.168.56.118 "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+```
+
+第一次连接时，如果提示：
+
+```text
+Are you sure you want to continue connecting (yes/no/[fingerprint])?
+```
+
+输入：
+
+```text
+yes
+```
+
+然后输入 Linux 上 oracle 用户的密码。
+
+#### 测试 private key 登录
+
+```cmd
+E:\OpenSSH-Win64\ssh.exe -i E:\OpenSSH-Win64\linux118.key oracle@192.168.56.118
+```
+
+以后可以使用：
+
+```cmd
+ssh -i E:\OpenSSH-Win64\linux118.key oracle@192.168.56.118
+```
+
+---
+
+#### 给 oracle 用户配置 sudo su - 权限
+
+需要先用 root 用户登录 Linux。
+
+#### 创建 sudoers 配置文件
+
+```bash
+su -
+
+cat > /etc/sudoers.d/oracle <<'EOF'
+oracle ALL=(ALL) NOPASSWD: ALL
+EOF
+
+chmod 440 /etc/sudoers.d/oracle
+visudo -cf /etc/sudoers.d/oracle
+```
+
+如果输出类似下面内容，说明配置正确：
+
+```text
+/etc/sudoers.d/oracle: parsed OK
+```
+
+#### 测试 oracle 用户 sudo 权限
+
+```bash
+su - oracle
+sudo su -
+whoami
+```
+
+如果输出：
+
+```text
+root
+```
+
+说明配置成功。
+
+
 #### 3. 配置 linux-inventory Skill
 
 需要完成以下配置：
