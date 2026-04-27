@@ -1,4 +1,4 @@
-# AI System Agent
+# Nanoorabot - AI System Agent
 
 **本项目是一个基于 `nanobot` 与 `nanobot-webui` 二次开发的 AI System Agent 机器人系统，目标是构建一个能够长期运行、具备自主执行能力的智能系统管理员。**
 *This project is an AI System Agent robot system developed based on `nanobot` and `nanobot-webui`, aiming to build an intelligent system administrator capable of long-term operation and autonomous execution.*
