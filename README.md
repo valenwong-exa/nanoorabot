@@ -2,7 +2,7 @@
 
 **本项目是一个基于 `nanobot` 与 `nanobot-webui` 二次开发的 AI System Agent 机器人系统，目标是构建一个能够长期运行、具备自主执行能力的智能系统管理员。**
 *This project is an AI System Agent robot system developed based on `nanobot` and `nanobot-webui`, aiming to build an intelligent system administrator capable of long-term operation and autonomous execution.*
-<img width="1146" height="207" alt="image" src="https://github.com/user-attachments/assets/8d52e6c9-27e7-4bea-babc-9c2b76039435" />
+<img width="1258" height="225" alt="image" src="https://github.com/user-attachments/assets/8a2d39b9-a670-4660-9a3d-7d799076a824" />
 
 *本项目由资深DBA系统架构师创建和维护，依赖vibe coding 创建。欢迎大家一起vide coding。
 *This project is created and maintained by a senior DBA system architect, with development powered by vibe coding. Everyone is welcome to join in and do vibe coding together.
@@ -23,6 +23,7 @@
 *By integrating the architecture of AI, Tools, Memory, and Web UI, we have formed a practical Agent management platform. This project is currently under development and is only intended for use in the DEV/UAT environment. If it is used in the production environment, the user shall bear all the consequences.This project assumes no responsibility.*
 **目前本项目仅仅测试了KIMI和Deepseek API*
 **Currently we just tested with KIMI and Deepseek API*
+
 
 <img width="1512" height="864" alt="image" src="https://github.com/user-attachments/assets/5c0918c8-34c7-49b8-ad38-479a9b99791b" />
 
