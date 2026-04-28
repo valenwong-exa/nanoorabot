@@ -150,7 +150,7 @@ SQL>
 sql -name 19cdb
 ```
 
-你可以参考 `sqlcl-conn` Skill 来完成数据库连接配置。
+
 
 #### 4. 申请和配置好AI API Key
 
