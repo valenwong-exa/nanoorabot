@@ -125,12 +125,14 @@ root
 
 - 配置 private key
 - 配置 `linux-inventory.json`
-- 按照 `SKILL.md` 的说明完成相关配置
+- 按照 `SKILL.md` 的说明完成相关配置,主机的IP，private key的位置，主机别名（如果担心引起歧义，可以不写别名，数据库的信息，其中sqlcl_saveconnname 是在Oracle MCP server saved的CONNECTION NAME，用于连接数据库）
 
 #### 4. 配置 Oracle MCP Server
 
+
 参考官方文档：  
 `https://docs.oracle.com/en/database/oracle/sql-developer-command-line/25.4/sqcug/using-oracle-sqlcl-mcp-server.html`
+Oracle MCP需要安装JDK，版本需要大于17
 
 其中最重要的一步是使用 SQLcl 保存数据库连接，例如：
 
@@ -143,8 +145,20 @@ Password: ******
 Connected.
 SQL>
 ```
+配置好以后，可以测试
+```
+sql -name 19cdb
+```
 
 你可以参考 `sqlcl-conn` Skill 来完成数据库连接配置。
+
+#### 4. 申请和配置好AI API Key
+
+推荐使用deepseek V4， KIMI2.6，其它API未经仔细测试。
+修改nanobot-runtime/config.json
+填入key和默认的workspace位置
+如果你需要配置社交媒体，按照nanobot的本体的README.txt进行配置。
+
 
 #### 5. 导入并测试更多 Oracle Database Skills
 
