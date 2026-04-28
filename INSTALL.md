@@ -34,10 +34,16 @@ conda 24.7.1
    让 AI 阅读项目的 `README` 文件后，为你制定详细的安装步骤。  
    Have the AI read the project's `README` and formulate detailed installation steps for you.
 
-## 使用 Vibe Coding 工具 / Using Vibe Coding Tools
+## 使用 Vibe Coding 工具来进行安装/ Using Vibe Coding Tools to install
 
-如果你正在使用 vibe coding 工具，直接让 AI 工具帮你完成安装即可。  
-If you are using a vibe coding tool, simply let the AI tool handle the installation for you.
+如果你正在使用 vibe coding 工具，直接让 AI 工具帮你完成安装即可!!! 尤其是DBA
+If you are using a vibe coding tool, simply let the AI tool handle the installation for you. Especially for DBA !
+
+把目录准备好，安装好基础软件后，把基础软件的配置（python，conda..）准备好环境文本。
+用AI编程软件打开根目录。
+让AI编程软件阅读，你的环境文本，阅读INSTALL.md 
+然后进行安装。
+当然，你如果想手工安装也可以。
 
 # 安装与启动说明
 
@@ -48,7 +54,7 @@ If you are using a vibe coding tool, simply let the AI tool handle the installat
 ```text
 E:\nanobot-main
 |-- INSTALL.md
-|-- backup_release_code.bat
+|-- nanobot-runtime
 |-- nanobot-015post1
 `-- nanobot-webui-main
 ```
@@ -70,7 +76,7 @@ E:\nanobot-main
 
 - 本包是源码安装方式，不是单文件 exe。
 - 首次部署需要安装 Python 和 Node.js。
-- `start_015post_webui.bat`、`switch_webui_to_015post.bat` 里带有原机器的固定路径。
+- `start_015post_webui.bat` 里带有原机器的固定路径。
 - 在异机上，建议先按本文档使用命令行完成安装和启动；如果要继续用这些 bat，请先把里面的路径改成新机器的实际路径。
 
 ## 2. 前置条件
