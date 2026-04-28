@@ -27,22 +27,19 @@ conda 24.7.1
    Specify the home directory path for your project.
 
 2. **提供环境信息 / Provide Environment Info**  
-   将上述环境信息告知 AI，并明确确认你要使用 **uv** 还是 **conda** 作为包管理工具。  
-   Share the above environment details with the AI, and explicitly confirm whether you want to use **uv** or **conda** as your package manager.
+   确认你要使用 **uv** 还是 **conda** 作为包管理工具。  
+   Explicitly confirm whether you want to use **uv** or **conda** as your package manager.
 
-3. **制定安装步骤 / Generate Installation Steps**  
-   让 AI 阅读项目的 `README` 文件后，为你制定详细的安装步骤。  
-   Have the AI read the project's `README` and formulate detailed installation steps for you.
 
 ## 使用 Vibe Coding 工具来进行安装/ Using Vibe Coding Tools to install
 
 如果你正在使用 vibe coding 工具，直接让 AI 工具帮你完成安装即可!!! 尤其是DBA
 If you are using a vibe coding tool, simply let the AI tool handle the installation for you. Especially for DBA !
 
-把目录准备好，安装好基础软件后，把基础软件的配置（python，conda..）准备好环境文本。
+把目录准备好，安装好基础软件（py,npm,conda..etc）后，把基础软件的配置准备好环境文本。
 用AI编程软件打开根目录。
 让AI编程软件阅读，你的环境文本，阅读INSTALL.md 
-然后进行安装。
+然后让AI进行安装。
 当然，你如果想手工安装也可以。
 
 # 安装与启动说明
@@ -420,11 +417,28 @@ nanobot webui start --host 127.0.0.1 --port 18780 --workspace E:\nanobot-runtime
 - 工作区路径
 - 配置文件路径
 - 端口号
+## 12. 安装中的一个问题
 
-## 12. 登录
+执行npm install，可能出现eslint版本不兼容情况，检查nanobot-webui-main\web\package.json中的eslint版本，根据报错信息做修改。
+如：package.json中的eslint版本偏高，需要降低，完成安装。修改package.json
+将：
+"@eslint/js": "^10.0.1",
+"eslint": "^10.0.3"
+
+修改为
+"@eslint/js": "^9.39.4",
+"eslint": "^9.39.4"
+
+重新执行npm install
+
+可以咨询AI，也有其它解决办法。 例如—force强制安装等。自行考虑。
+
+## 12. 申请API KEY
+
+自行申请API KEY 配置并使用.配置方法，参考nanobot本体中的README。
+
+## 13. 登录
 
 默认密码 admin/nanobot
 
-## 13. 申请API KEY
 
-自行申请API KEY 配置并使用
