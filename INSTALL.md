@@ -4,6 +4,7 @@
 
 建议自行提前安装好以下环境：  
 It is recommended to install the following environments beforehand:
+python >= 3.11 is OK
 
 ```powershell
 C:\Users\Administrator&gt; python --version
