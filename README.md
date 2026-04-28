@@ -24,9 +24,7 @@
 **目前本项目仅仅测试了KIMI和Deepseek API*
 **Currently we just tested with KIMI and Deepseek API*
 
-
-<img width="1512" height="864" alt="image" src="https://github.com/user-attachments/assets/5c0918c8-34c7-49b8-ad38-479a9b99791b" />
-
+<img width="2240" height="1030" alt="image" src="https://github.com/user-attachments/assets/1aadb792-e618-4c17-9237-6f4c5eb3c01b" />
 
 
 ## 核心特性 / Core Features
