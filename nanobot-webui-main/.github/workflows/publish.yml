@@ -1,0 +1,61 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'  # 当推送 v* 格式的标签时触发（例如 v0.1.0）
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+      
+    - name: 设置 Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: 安装 Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+        
+    - name: 构建前端
+      run: |
+        cd web
+        bun install --frozen-lockfile
+        bun run build
+
+    - name: 复制前端产物到 Python 包目录
+      run: |
+        mkdir -p webui/web
+        cp -r web/dist webui/web/dist
+
+    - name: 安装构建工具
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+        
+    - name: 构建分发包
+      run: python -m build
+      
+    - name: 检查分发包
+      run: twine check dist/*
+      
+    - name: 发布到 Test PyPI
+      if: github.event_name == 'workflow_dispatch'
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
+      run: twine upload --repository testpypi dist/*
+      
+    - name: 发布到 PyPI
+      if: startsWith(github.ref, 'refs/tags/')
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+      run: twine upload dist/*

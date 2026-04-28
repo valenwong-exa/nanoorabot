@@ -1,0 +1,408 @@
+主机页面开发说明
+
+1. 页面目标
+
+新增一个“主机”页面，用于展示当前 workspace 中维护的主机清单。
+该页面当前定位为“主机清单 + 连通性检查”页面。
+它会展示 inventory 中配置的 Linux 主机，并在页面打开时自动执行一次真实连通性探测。
+数据库部分已接入 Oracle 实例状态检查，当前会在 Linux 主机上以 `oracle` 用户执行 `sqlplus` 查询实例状态。
+页面主要用于：
+
+- 展示主机列表
+- 展示每个主机下挂载的数据库信息
+- 展示主机最近一次检查状态
+- 支持自动刷新与手工刷新主机状态
+
+
+2. 数据来源
+
+主机页面的数据来源不是写死在前端，而是每次进入页面时，动态读取当前启动 WebUI 时指定 workspace 下的：
+
+skills/linux-inventory/linux-inventory.json
+
+例如当前测试 workspace 为：
+
+E:\nanobot-main\dba1
+
+则实际读取文件为：
+
+E:\nanobot-main\dba1\skills\linux-inventory\linux-inventory.json
+
+当前 inventory 文件结构示例：
+
+{
+  "host_inventory": [
+    {
+      "host_name": "19cdb",
+      "aliases": ["19c", "19ee", "19db"],
+      "ip": "192.168.56.110",
+      "ssh_key": "E:\\OpenSSH-Win64\\oracle19db1_oracle.key",
+      "default_user": "oracle",
+      "privilege_escalation": "sudo su -",
+      "host_status": "Running",
+      "os_type": "Oracle Linux 8",
+      "databases": [
+        {
+          "database_name": "19cdb",
+          "database_version": "19.30",
+          "database_status": "OPEN"
+        }
+      ]
+    }
+  ]
+}
+
+
+3. 后端实现
+
+为避免前端直接拼 workspace 路径访问文件，后端提供了专门的 inventory 读取与刷新接口。
+
+后端文件：
+
+E:\nanobot-main\nanobot-webui-main\webui\api\routes\hosts.py
+
+接口：
+
+GET /api/hosts/inventory
+POST /api/hosts/inventory/refresh
+
+实现逻辑：
+
+- 从当前运行中的 WebUI 配置中读取 workspace 路径
+- 拼出 skills/linux-inventory/linux-inventory.json
+- `GET /api/hosts/inventory`：读取当前 inventory，直接返回上一次保存的状态
+- `POST /api/hosts/inventory/refresh`：对每台主机执行真实探测，并将结果回写到 inventory 文件
+- 返回：
+  - workspace
+  - inventory_path
+  - exists
+  - hosts
+
+刷新接口的主机探测逻辑：
+
+- 先对主机 IP 执行 `ping`
+- 如果 `ping` 成功，再使用环境变量 `OPENSSH_HOME` 下的 `ssh.exe` 登录主机
+- SSH 登录后执行一个简单的 `date` 命令
+- 根据结果给出状态：
+  - `Running`：`ping` 成功，SSH 登录成功，`date` 执行成功
+  - `unable login`：`ping` 成功，但 SSH 登录或 `date` 执行失败
+  - `invalid`：`ping` 失败
+- 如果 inventory 中原本没有 `host_status` 字段，则读取时默认补成 `unknown`
+
+刷新接口的数据库探测逻辑：
+
+- 只有在主机状态为 `Running` 时，才继续检查数据库状态
+- 通过 SSH 在 Linux 主机上执行数据库状态查询
+- 如果当前 SSH 登录用户不是 `oracle`，则通过 `sudo -iu oracle` 切换到 `oracle` 用户执行
+- 执行的核心命令如下：
+
+  `printf 'set heading off\nset feedback off\nset pagesize 0\nset verify off\nset echo off\nselect status from v$instance;\nexit\n' | sqlplus -s "/ as sysdba" | xargs`
+
+- 解析结果规则：
+  - 成功返回如 `OPEN`、`MOUNTED`、`STARTED` 时，页面直接显示该值
+  - 如果返回报错、空输出、`ORA-`、`SP2-`、`idle instance`，则统一记为 `INVALID`
+  - 如果主机本身无法登录或不可达，也统一记为 `INVALID`
+- 如果 inventory 中原本没有 `database_status` 字段，则读取时默认补成 `UNKNOWN`
+
+回写逻辑：
+
+- 刷新完成后，后端会把每台主机的 `host_status` 写回 `skills/linux-inventory/linux-inventory.json`
+- 刷新完成后，后端也会把每个数据库对象的 `database_status` 写回 inventory 文件
+- 因此页面下次打开时，可以先显示“上一次检查结果”，再执行新一轮刷新
+
+该接口已注册到：
+
+E:\nanobot-main\nanobot-webui-main\webui\api\server.py
+
+这样做的目的：
+
+- 页面每次打开都能读到当前 workspace 最新 inventory
+- 页面可以先展示旧状态，再异步刷新为新状态
+- 不需要在前端写死路径
+- 和 WebUI 启动时指定的 workspace 保持一致
+
+
+4. 前端数据读取方式
+
+前端新增 hook：
+
+E:\nanobot-main\nanobot-webui-main\web\src\hooks\useHostInventory.ts
+
+作用：
+
+- 请求 /api/hosts/inventory
+- 获取当前 workspace 的主机清单
+- 获取 inventory 中缓存的 `host_status`
+- 获取 inventory 中缓存的 `database_status`
+- 提供手工刷新主机状态的能力
+
+当前还额外新增了一个刷新 hook：
+
+- 使用 mutation 调用 `POST /api/hosts/inventory/refresh`
+- 刷新成功后直接更新 React Query 中的 `host-inventory` 缓存
+
+关键配置：
+
+- staleTime: 0
+- refetchOnMount: "always"
+
+这表示：
+
+- 页面每次重新进入都会重新读取 inventory
+- 不会长期使用缓存结果
+- 页面首次进入时先显示 inventory 中已有状态
+- 页面进入后会自动触发一次真实检查
+- 主机状态和数据库状态会在同一次刷新中一起更新
+
+
+5. 页面实现文件
+
+页面主文件：
+
+E:\nanobot-main\nanobot-webui-main\web\src\pages\ServerHost.tsx
+
+该页面从最初的空白占位页，升级为 dashboard 样式页面。
+
+
+6. 页面结构设计
+
+页面整体风格参考系统原有“仪表板”页面，保持卡片式布局和较统一的视觉语言。
+
+页面分为两大部分：
+
+6.1 顶部统计卡片
+
+顶部使用 4 个统计卡片展示摘要信息：
+
+- 主机总数
+- Running 主机
+- 数据库数量
+- 关注主机 / 异常主机
+
+说明：
+
+- 这些卡片的布局和现有 Dashboard 页面风格保持一致
+- 用于快速展示 inventory 的概览信息
+- 统计值根据 `host_status` 实时计算，不再是固定假数据
+
+
+6.2 主机卡片网格
+
+下方为主机卡片列表，采用响应式 grid：
+
+- 窄屏 1 列
+- 中屏 2 列
+- 大屏最多 4 列
+
+每个主机使用一个 card 展示。
+
+
+6.3 顶部刷新区
+
+主机主卡片头部新增了刷新能力：
+
+- 显示当前 workspace
+- 提供一个“刷新”按钮
+- 点击后可以手工触发一次完整主机检查
+
+页面在自动刷新或手工刷新时：
+
+- 显示一个带闪烁横条的“更新中”提示
+- 刷新按钮进入禁用状态
+- 刷新图标显示旋转动画
+- 刷新完成后提示横条自动消失
+
+
+7. 每个主机卡片展示内容
+
+每张主机卡片当前包含以下内容：
+
+- 主机名称
+- 操作系统类型
+- 主机状态（真实检查结果）
+- IP 地址
+- 默认用户
+- 别名数量
+- 数据库状态模块
+- 数据库实例状态
+- 主机别名标签列表
+
+
+8. 状态设计说明
+
+当前页面的主机状态和数据库状态都已经接入真实探测。
+
+8.1 主机状态
+
+主机状态不是前端写死，而是由后端探测后返回。
+
+状态值包括：
+
+- `Running`
+- `unable login`
+- `invalid`
+- `unknown`
+
+说明：
+
+- `Running`：主机可 ping，且可通过 SSH 执行 `date`
+- `unable login`：主机可 ping，但 SSH 登录失败或命令执行失败
+- `invalid`：主机无法 ping 通
+- `unknown`：旧 inventory 中尚未写入过状态，页面首次读取时的默认值
+
+页面行为：
+
+- 页面打开时先显示 inventory 中上一次保存的状态
+- 随后自动触发刷新
+- 刷新完成后 UI 和 inventory 同步更新为最新状态
+
+
+8.2 数据库状态
+
+数据库状态由后端通过 SSH + `sqlplus` 真实探测后返回。
+
+状态值说明：
+
+- `OPEN` / `MOUNTED` / `STARTED`
+- `INVALID`
+- `UNKNOWN`
+
+规则说明：
+
+- 使用 `select status from v$instance;` 获取 Oracle 实例状态
+- 正常返回什么，页面就显示什么
+- 如果执行报错，或数据库未启动，则显示 `INVALID`
+- `UNKNOWN` 只用于旧 inventory 中尚未保存数据库状态的情况
+- 当前查询的是实例级状态，不区分 PDB，也不读取更细的数据库健康指标
+
+
+9. 数据库展示项
+
+按需求控制在不超过 3 项，当前展示为：
+
+- 数据库状态
+- 主数据库名称
+- 数据库版本
+- 部署方式（静态显示为“单实例”）
+
+说明：
+
+- inventory 中当前每台主机可能有多个数据库
+- 现阶段卡片里优先展示第一个数据库作为主数据库
+- 当前数据库状态查询使用的是实例级状态，因此同一主机下多个数据库对象会写入同一个 `database_status`
+- 后续如果要扩展，可改成：
+  - 展示多个数据库 badge
+  - 展示可展开数据库列表
+  - 展示更多数据库属性
+
+
+10. 多语言支持
+
+主机页面相关文案已接入 i18n。
+
+新增的 key 包括：
+
+- nav.serverHost
+- host.title
+- host.subtitle
+- host.empty
+- host.inventorySource
+- host.refreshing
+- host.status.*
+- host.stats.*
+- host.labels.*
+- host.database.*
+- common.refresh
+
+已同步更新语言文件：
+
+- zh.json
+- en.json
+- zh-TW.json
+- ja.json
+- ko.json
+- de.json
+- fr.json
+
+
+11. 导航接入
+
+左侧导航栏“通用”分组中新增了：
+
+- 主机
+
+并放在第一位。
+
+对应路由为：
+
+/server-host
+
+
+12. 当前实现特点
+
+当前主机页面具备以下特点：
+
+- 页面打开时动态读取当前 workspace 的 inventory
+- 页面打开时先显示上一次保存的 `host_status`
+- 页面打开时先显示上一次保存的 `database_status`
+- 页面进入后自动执行一次真实主机检查
+- 支持手工点击“刷新”按钮再次检查
+- 检查结果会回写 inventory 中的 `host_status`
+- 检查结果会回写 inventory 中的 `database_status`
+- UI 风格与现有 Dashboard 页面保持一致
+- 支持多语言
+- 主机状态为真实探测结果
+- 数据库状态为真实探测结果
+
+
+13. 当前没有实现的内容
+
+当前版本未实现：
+
+- 主机详情页
+- 数据库详情页
+- 主机筛选、搜索、排序
+- 后台周期性自动轮询刷新
+- 每台主机独立刷新按钮
+- 刷新时间戳展示
+
+
+14. 后续可扩展方向
+
+后续如果继续开发，可考虑：
+
+- 为每个主机增加“查看详情”按钮
+- 增加数据库展开列表
+- 增加 CPU / 内存 / 磁盘等摘要指标
+- 增加主机搜索与过滤
+- 增加最近刷新时间和错误详情
+- 支持并发刷新和超时配置
+- 扩展数据库检查为监听、实例、PDB 等更细粒度状态采集
+- 支持从 inventory 中读取更多字段并展示
+
+
+15. 本次涉及的主要文件
+
+后端：
+
+- E:\nanobot-main\nanobot-webui-main\webui\api\routes\hosts.py
+- E:\nanobot-main\nanobot-webui-main\webui\api\server.py
+- E:\nanobot-main\nanobot-webui-main\tests\api\routes\test_hosts.py
+
+前端：
+
+- E:\nanobot-main\nanobot-webui-main\web\src\hooks\useHostInventory.ts
+- E:\nanobot-main\nanobot-webui-main\web\src\pages\ServerHost.tsx
+- E:\nanobot-main\nanobot-webui-main\web\src\components\ui\button.tsx
+- E:\nanobot-main\nanobot-webui-main\web\src\components\layout\Sidebar.tsx
+- E:\nanobot-main\nanobot-webui-main\web\src\App.tsx
+
+多语言：
+
+- E:\nanobot-main\nanobot-webui-main\web\src\i18n\locales\zh.json
+- E:\nanobot-main\nanobot-webui-main\web\src\i18n\locales\en.json
+- E:\nanobot-main\nanobot-webui-main\web\src\i18n\locales\zh-TW.json
+- E:\nanobot-main\nanobot-webui-main\web\src\i18n\locales\ja.json
+- E:\nanobot-main\nanobot-webui-main\web\src\i18n\locales\ko.json
+- E:\nanobot-main\nanobot-webui-main\web\src\i18n\locales\de.json
+- E:\nanobot-main\nanobot-webui-main\web\src\i18n\locales\fr.json
