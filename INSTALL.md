@@ -135,11 +135,12 @@ xcopy "web\dist" "webui\web\dist\" /E /I /Y
 - `D:\nanoorabot-main\nanobot-runtime\config.json`
 - `D:\nanoorabot-main\nanobot-webui-main\start_webui_dba1.bat`
 
-其中最重要的是：
+其中config.json最重要的是：
 
 - 模型配置
 - `workspace` 路径
 - WebUI 启动路径和端口
+具体可以参考nanobot本体的配置方法。
 
 `start_webui_dba1.bat` 里建议至少确认这些变量已经改成你的实际路径：
 
@@ -153,6 +154,7 @@ set "WORKSPACE=D:\nanoorabot-main\nanobot-runtime\workspace\dba1"
 set "PORT=18780"
 set "CONDA_ENV=nanobot-webui"
 ```
+该bat是带有编译。你可以让AI帮你修改为一个纯启动版本。
 
 ### 启动 WebUI
 
