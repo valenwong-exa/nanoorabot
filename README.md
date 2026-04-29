@@ -26,7 +26,11 @@
 
 <img width="2240" height="1030" alt="image" src="https://github.com/user-attachments/assets/1aadb792-e618-4c17-9237-6f4c5eb3c01b" />
 
-
+## 安装文档 | Installation guide
+https://github.com/valenwong-exa/nanoorabot/blob/main/INSTALL.md
+https://github.com/valenwong-exa/nanoorabot/blob/main/nanoorabot_linux_install.md
+## DBA起步手册 | Beginning Guide for DBA
+https://github.com/valenwong-exa/nanoorabot/blob/main/DBA_BEST_PRACTICE.md
 ## 核心特性 / Core Features
 
 * **自主运行的系统管理员 / Autonomous System Administrator**: 
