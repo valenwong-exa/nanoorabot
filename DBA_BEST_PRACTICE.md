@@ -161,9 +161,12 @@ root
 帮我连接到23ai的Linux，检查下sysctl配置
 帮我连接到orcldb的数据库，检查一下字符集
 *注意：最好加上Linux 或者 数据库 在prompt中，否则AI很可能困惑，你是连接Linux还是数据库（采用ORACLE MCP工具）*
+<img width="1113" height="807" alt="image" src="https://github.com/user-attachments/assets/cc3e2ccf-7e70-4279-8d6d-2a70c33c2aa8" />
 
 目前Linux主机，默认oracle用户为数据库用户，默认的bash配置是/home/oracle/.bash_profile
-改配置文件，并非用代码读取，是AI自行阅读，所以目前可以修改json架构。
+AI读取配置文件，并非用代码读取，是AI自行阅读。但是Dashboard页面是解析该json，所以需要保持基本格式。但可以添加新items。
+<img width="560" height="597" alt="image" src="https://github.com/user-attachments/assets/2ed34a05-5383-498a-9828-2dfb3f0ab188" />
+
 
 
 
@@ -177,8 +180,8 @@ Oracle MCP需要安装JDK，版本需要大于17
 其中最重要的一步是使用 SQLcl 保存数据库连接，例如：
 
 ```sql
-SQL> conn -save cline_mcp -savepwd User123/pass123@//databaseserver:1521/orcl
-Name: cline_mcp
+SQL> conn -save 19cdb -savepwd User123/pass123@//databaseserver:1521/orcl
+Name: 19cdb
 Connect String: //databaseserver:1521/orcl
 User: User123
 Password: ******
@@ -209,8 +212,10 @@ sql -name 19cdb
       },
 ```
 配置好以后，在页面工具/MCP，可以看到工具已经生效。
+<img width="1572" height="303" alt="image" src="https://github.com/user-attachments/assets/3e29c551-442e-4313-a673-8d368b94e016" />
 
-自然语言提问：帮我连接到cline_mcp数据库。
+自然语言提问：帮我连接到19cdb数据库。
+<img width="1125" height="841" alt="image" src="https://github.com/user-attachments/assets/0347705b-0390-4e11-8c35-4617944d7621" />
 
 #### 4. 申请和配置好AI API Key
 
