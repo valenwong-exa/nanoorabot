@@ -236,6 +236,18 @@ sql -name 19cdb
 1. 可以用win ssh tool连接到linux，运行任意命令
 2. 可以用oracle sqlcl MCP server连接到数据库，运行命令
 
+#### 6. 测试APPLY ONEOFF Patch 的简单说明
+
+dba1中带有一个one off patch的SKILL
+前提是
+1. 你可以通过ssh连接到linux  就绪
+2. Linux环境最好是标准和规范的oracle的环境，环境变量都设置完备。避免AI反复浪费tokens去搜索路径。
+
+测试： 帮我在19cdb linux安装one off 补丁 23399134， 补丁在workspace的patch目录，包含 23399134 和 6880880，帮我上传到/oracle/patch，并进行安装工作。
+PS：你可以提前帮AI上传好补丁，节约tokens。
+具体步骤，阅读SKILL.md，按需进行修改。
+
+#### END
 完成以上步骤后，就可以继续导入并测试更多 Oracle Database 相关的 Skills。
 
 ---
