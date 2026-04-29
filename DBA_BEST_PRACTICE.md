@@ -217,6 +217,10 @@ sql -name 19cdb
 自然语言提问：帮我连接到19cdb数据库。
 <img width="1125" height="841" alt="image" src="https://github.com/user-attachments/assets/0347705b-0390-4e11-8c35-4617944d7621" />
 
+在测试环境，MCP的安全级别为0，所以可以执行任何命令和脚本。具体可以阅读oracle的SQLCL guide
+<img width="1070" height="529" alt="image" src="https://github.com/user-attachments/assets/1c23f5cd-fe3b-4184-9c4f-331fb5eaa129" />
+
+
 #### 4. 申请和配置好AI API Key
 
 推荐使用deepseek V4， KIMI2.6，其它API未经仔细测试，需自行测试。
