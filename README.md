@@ -4,7 +4,7 @@
 *This project is an AI System Agent robot system developed based on `nanobot` and `nanobot-webui`, aiming to build an intelligent system administrator capable of long-term operation and autonomous execution.*
 <img width="1258" height="225" alt="image" src="https://github.com/user-attachments/assets/8a2d39b9-a670-4660-9a3d-7d799076a824" />
 
-*本项目由资深DBA系统架构师创建和维护，依赖vibe coding 创建。欢迎大家一起vide coding。
+*本项目由资深DBA系统架构师创建和维护，依赖vibe coding 进行开发和维护。欢迎大家一起vide coding。
 *This project is created and maintained by a senior DBA system architect, with development powered by vibe coding. Everyone is welcome to join in and do vibe coding together.
 
 **它面向主机管理、数据库管理和自动化运维场景，强调可扩展、可观测、可持续运行。**
@@ -108,7 +108,7 @@ https://github.com/krisrice/oracle-db-skills
 **本项目采用 MIT 许可证开源。**
 *This project is open-sourced under the MIT License.*
 
-**请保留Valen Wang（王探长）和AI Database Plaftform Team的署名 Please retain the bylines of Valen Wang and the AI Database Platform Team.*
+**请保留Valen Wang（王探长），Wanbin，Lijie 和AI Database Plaftform Team的署名 Please retain the bylines of Valen Wang and the AI Database Platform Team.*
 
 **任何人都可以免费获取本软件及其相关文档的副本，并在满足 MIT 协议条款的前提下进行使用、复制、修改、合并、发布、分发等操作。**
 *Anyone can obtain a copy of this software and its associated documentation files for free, and use, copy, modify, merge, publish, distribute, etc., under the terms of the MIT License.*
