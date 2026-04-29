@@ -91,9 +91,10 @@
 来自AI Data Flatform 团队整理
 
 感谢整理和提供
+```
 https://github.com/oracle/skills
 https://github.com/krisrice/oracle-db-skills
-
+```
 
 
 
