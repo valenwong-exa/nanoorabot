@@ -7,7 +7,7 @@ Oracle DBA 快速起步 / Best Start for Oracle DBA
 #### 1. 创建一个带 Oracle Database 的测试虚拟机
 
 建议先创建一个包含 Oracle Database 的测试 VM，用于学习、验证和测试相关操作。  
-这样可以节省大量环境准备和排障时间。
+这样可以节省大量环境准备和排障时间。里面自带一个free26，但你可以轻松的卸载掉，安装任何>=19c版本。
 
 参考链接：  
 `https://www.oracle.com/database/technologies/databaseappdev-vm.html`
@@ -22,7 +22,12 @@ Oracle DBA 快速起步 / Best Start for Oracle DBA
 
 其值应指向 `openssh-win64` 的解压目录。
 
+内置的ssh 工具，会默认调用它，访问Linux Server
+
 #### 创建 SSH Private Key 并配置免密登录
+
+内置ssh工具是用private key 来实现自动化访问Linux，并运行命令。所以，你要创建key。
+类似我们使用云服务器，也是采用private key运维，方法同理。
 
 在 Windows 本地生成 key
 
@@ -122,10 +127,45 @@ root
 #### 3. 配置 linux-inventory Skill
 
 需要完成以下配置：
+```
+    {
+      "host_name": "MiWiFi-R3P-srv",
+      "aliases": [
+        "23ai",
+        "23db"
+      ],
+      "ip": "192.168.56.118",
+      "ssh_key": "E:\\OpenSSH-Win64\\linux118.key",
+      "default_user": "oracle",
+      "privilege_escalation": "sudo su -",
+      "os_type": "Oracle Linux 8.10",
+      "databases": [
+        {
+          "database_name": "ORCLCDB",
+          "sqlcl_saveconnname": "orcldb",
+          "database_version": "23.0.0.0.0",
+          "oracle_home": "/opt/oracle/product/23c/dbhome_1",
+          "pdb": "Y",
+          "database_status": "OPEN"
+        }
+      ],
+      "host_status": "Running"
+    },
+```
 
 - 配置 private key
 - 配置 `linux-inventory.json`
-- 按照 `SKILL.md` 的说明完成相关配置,主机的IP，private key的位置，主机别名（如果担心引起歧义，可以不写别名，数据库的信息，其中sqlcl_saveconnname 是在Oracle MCP server saved的CONNECTION NAME，用于连接数据库）
+- 按照 `SKILL.md` 的说明完成相关配置,主机的IP，private key的位置，主机别名aliases（如果担心引起歧义，可以不写别名，但你需要精确的告诉AI主机名或者IP，数据库的信息，其中sqlcl_saveconnname 是在Oracle MCP server saved的CONNECTION NAME，用于连接数据库）
+
+配置好以后，可以用自然语言：
+帮我连接到23ai的Linux，检查下sysctl配置
+帮我连接到orcldb的数据库，检查一下字符集
+*注意：最好加上Linux 或者 数据库 在prompt中，否则AI很可能困惑，你是连接Linux还是数据库（采用ORACLE MCP工具）*
+
+目前Linux主机，默认oracle用户为数据库用户，默认的bash配置是/home/oracle/.bash_profile
+改配置文件，并非用代码读取，是AI自行阅读，所以目前可以修改json架构。
+
+
 
 #### 4. 配置 Oracle MCP Server
 
@@ -149,12 +189,32 @@ SQL>
 ```
 sql -name 19cdb
 ```
+在config.json的末尾配置,例如
+```
+"oracle-sqlcl": {
+        "type": "stdio",
+        "command": "E:\\sqlcl\\bin\\sql.exe",
+        "args": [
+          "-R",
+          "0",
+          "-mcp"
+        ],
+        "env": {},
+        "url": "",
+        "headers": {},
+        "toolTimeout": 30,
+        "enabledTools": [
+          "*"
+        ]
+      },
+```
+配置好以后，在页面工具/MCP，可以看到工具已经生效。
 
-
+自然语言提问：帮我连接到cline_mcp数据库。
 
 #### 4. 申请和配置好AI API Key
 
-推荐使用deepseek V4， KIMI2.6，其它API未经仔细测试。
+推荐使用deepseek V4， KIMI2.6，其它API未经仔细测试，需自行测试。
 修改nanobot-runtime/config.json
 填入key和默认的workspace位置
 如果你需要配置社交媒体，按照nanobot的本体的README.txt进行配置。
@@ -171,55 +231,4 @@ sql -name 19cdb
 
 ---
 
-### English
 
-A good quick-start path for an Oracle DBA is as follows:
-
-#### 1. Create a test VM with Oracle Database
-
-It is recommended to start with a test virtual machine that already includes Oracle Database.  
-This is very useful for learning, validation, and testing, and can save a lot of setup and troubleshooting time.
-
-Reference:  
-`https://www.oracle.com/database/technologies/databaseappdev-vm.html`
-
-#### 2. Download and configure openssh-win64
-
-Download `openssh-win64` and unzip it to a local directory.
-
-Then configure the following environment variable:
-
-`OPENSSH_HOME`
-
-Its value should point to the directory where `openssh-win64` was extracted.
-
-#### 3. Configure the linux-inventory Skill
-
-The following items need to be configured:
-
-- Configure the private key
-- Configure `linux-inventory.json`
-- Read `SKILL.md` and complete the required setup
-
-#### 4. Configure the Oracle MCP Server
-
-Refer to the official documentation:  
-`https://docs.oracle.com/en/database/oracle/sql-developer-command-line/25.4/sqcug/using-oracle-sqlcl-mcp-server.html`
-
-The most important step is to save the database connection in SQLcl, for example:
-
-```sql
-SQL> conn -save cline_mcp -savepwd User123/pass123@//databaseserver:1521/orcl
-Name: cline_mcp
-Connect String: //databaseserver:1521/orcl
-User: User123
-Password: ******
-Connected.
-SQL>
-```
-
-You can also refer to the `sqlcl-conn` Skill for database connection setup.
-
-#### 5. Import and test more Oracle Database Skills
-
-After completing the steps above, you can start importing and testing more Oracle Database related Skills.
