@@ -1,28 +1,38 @@
 # OCI Linux Step provided by Qiong Wu
 ## 创建虚拟环境环境 | Create venv
+```
 python3 -m venv .nanobot-webui
 . .nanobot-webui/bin/activate
+```
 
 ## 安装 Python 依赖 | Install py lib
+```
 cd nanoorabot
 python -m pip install --upgrade pip setuptools wheel
 python -m pip install -e nanobot-015post1
 python -m pip install -e nanobot-webui-main
+```
 
 安装完成后，可立刻执行下面命令验证 nanobot-ai 是否来自本地 nanobot-015post1：  | Verify
+```
 python -m pip show nanobot-ai
+```
 
 ## 构建前端 | build front
+```
 cd ~/nanoorabot/nanobot-webui-main
 npm install --legacy-peer-deps
 npm run build
+```
 
 ## 同步前端产物到后端静态目录 | Copy static resource 
 切换到项目根目录 | switch to root 
+```
 cd /home/opc/nanoorabot-main/nanobot-webui-main
 rm -rf webui/web/dist
 mkdir -p webui/web/dist
 cp -rn web/dist/* webui/web/dist/
+```
 
 
 ## 配置初始化（重要）| initial config
@@ -36,7 +46,7 @@ cp -rn web/dist/* webui/web/dist/
 
 
 s.sh 里建议至少确认这些变量已经改成你的实际路径：
-
+```
 #!/bin/bash
 
 # --- config variable ---
@@ -80,7 +90,6 @@ fi
 echo "[4/4] Starting WebUI..."
 cd "$ROOT"
 ##  active venv
-*注意：Linux 下可执行文件通常在 bin/ 目录下，而不是 Scripts/*
 source ~/nanoorabot/.nanobot-webui/bin/activate
 
 ##   nohup running
@@ -97,11 +106,13 @@ echo "Done. WebUI is running in background."
 echo "Access at: http://<Your_Server_IP>:$PORT/"
 echo "Check logs with: tail -f webui.log"
 echo "------------------------------------------------"
+```
 
-----------------------------------------------------------------------
 ## 开放18780 | Open 18780 port
+```
 sudo firewall-cmd --permanent --add-port=18780/tcp 
 sudo firewall-cmd --reload 
-sudo firewall-cmd --list-ports 
+sudo firewall-cmd --list-ports
+```
 
 
