@@ -1,49 +1,46 @@
-
-创建虚拟环境环境
+# OCI Linux Step provided by Qiong Wu
+## 创建虚拟环境环境 | Create venv
 python3 -m venv .nanobot-webui
 . .nanobot-webui/bin/activate
 
-安装 Python 依赖
+## 安装 Python 依赖 | Install py lib
 cd nanoorabot
 python -m pip install --upgrade pip setuptools wheel
 python -m pip install -e nanobot-015post1
 python -m pip install -e nanobot-webui-main
 
-安装完成后，可立刻执行下面命令验证 nanobot-ai 是否来自本地 nanobot-015post1：
+安装完成后，可立刻执行下面命令验证 nanobot-ai 是否来自本地 nanobot-015post1：  | Verify
 python -m pip show nanobot-ai
 
-构建前端
+## 构建前端 | build front
 cd ~/nanoorabot/nanobot-webui-main
 npm install --legacy-peer-deps
 npm run build
 
-同步前端产物到后端静态目录
-# 切换到项目根目录
+## 同步前端产物到后端静态目录 | Copy static resource 
+切换到项目根目录 | switch to root 
 cd /home/opc/nanoorabot-main/nanobot-webui-main
-# 如果目标目录已存在，则删除旧的产物
 rm -rf webui/web/dist
-# 创建目标目录并同步（类似于 xcopy /E /I /Y）
 mkdir -p webui/web/dist
 cp -rn web/dist/* webui/web/dist/
 
 
-6.5 配置初始化（重要）
+## 配置初始化（重要）| initial config
 本次手工安装方式，建议直接修改已有运行时配置。
-需要重点确认以下两个文件：
+需要重点确认以下两个文件：| two important files
     ~/nanoorabot/nanobot-runtime/config.json
     ~/nanoorabot/nanobot-webui-main/s.sh
-其中config.json最重要的是：
+ config.json ：
+    Model APY
+    workspace path
 
-    模型配置
-    workspace 路径
-    WebUI 启动路径和端口具体可以参考nanobot本体的配置方法。
 
 s.sh 里建议至少确认这些变量已经改成你的实际路径：
 
 #!/bin/bash
 
-# --- 配置变量 ---
-# 请根据实际路径修改，建议使用绝对路径
+# --- config variable ---
+# 请根据实际路径修改，建议使用绝对路径 | modify path as your env, suggest to use direct path
 ROOT="/home/opc/nanoorabot/nanobot-webui-main"
 WEB="$ROOT/web"
 WEB_DIST="$WEB/dist"
@@ -82,11 +79,11 @@ fi
 
 echo "[4/4] Starting WebUI..."
 cd "$ROOT"
-# 激活虚拟环境并启动
-# 注意：Linux 下可执行文件通常在 bin/ 目录下，而不是 Scripts/
+##  active venv
+*注意：Linux 下可执行文件通常在 bin/ 目录下，而不是 Scripts/*
 source ~/nanoorabot/.nanobot-webui/bin/activate
 
-# 使用 nohup 后台运行，并重定向日志
+##   nohup running
 nohup python3 -m webui \
     --host 0.0.0.0 \
     --port $PORT \
@@ -102,7 +99,7 @@ echo "Check logs with: tail -f webui.log"
 echo "------------------------------------------------"
 
 ----------------------------------------------------------------------
-开放18780
+## 开放18780 | Open 18780 port
 sudo firewall-cmd --permanent --add-port=18780/tcp 
 sudo firewall-cmd --reload 
 sudo firewall-cmd --list-ports 
