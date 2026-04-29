@@ -1,4 +1,4 @@
-Oracle DBA 快速起步 / Best Start for Oracle DBA
+Oracle DBA 快速起步 / Best Start for Oracle DBA (EN version follows in the latter part.)
 
 ### 中文
 
@@ -251,5 +251,333 @@ PS：你可以提前帮AI上传好补丁，节约tokens。
 完成以上步骤后，就可以继续导入并测试更多 Oracle Database 相关的 Skills。
 
 ---
+
+
+# Best Start for Oracle DBA
+
+A quick-start approach for Oracle DBAs is as follows:
+
+## 1. Create a Test VM with Oracle Database
+
+It is recommended to first create a test VM that already includes Oracle Database.  
+This VM can be used for learning, validation, and testing DBA operations.
+
+This can save a lot of time on environment preparation and troubleshooting.  
+The VM comes with Oracle Database Free 26ai by default, but you can easily uninstall it and install any Oracle Database version >= 19c.
+
+Reference:
+
+`https://www.oracle.com/database/technologies/databaseappdev-vm.html`
+
+---
+
+## 2. Download and Configure openssh-win64
+
+First, download `openssh-win64` and extract it to a local directory.
+
+Then configure the system environment variable:
+
+`OPENSSH_HOME`
+
+The value should point to the directory where `openssh-win64` was extracted.
+
+The built-in SSH tool will use this directory by default to access Linux servers.
+
+---
+
+## Create an SSH Private Key and Configure Passwordless Login
+
+The built-in SSH tool uses a private key to automatically access Linux and run commands.  
+Therefore, you need to create an SSH key.
+
+This is similar to how we manage cloud servers using private keys.
+
+### Generate the Key Locally on Windows
+
+Run the following commands in CMD:
+
+```cmd
+cd /d E:\OpenSSH-Win64
+
+E:\OpenSSH-Win64\ssh-keygen.exe -t ed25519 -f E:\OpenSSH-Win64\linux118.key -C "oracle@192.168.56.118"
+```
+
+If you do not want to set a passphrase, press Enter twice.
+
+After the key is generated, you will get two files:
+
+```text
+E:\OpenSSH-Win64\linux118.key       -- private key, keep it locally
+E:\OpenSSH-Win64\linux118.key.pub   -- public key, copy it to Linux
+```
+
+### Add the Public Key to Linux authorized_keys
+
+Run the following command in CMD:
+
+```cmd
+type E:\OpenSSH-Win64\linux118.key.pub | E:\OpenSSH-Win64\ssh.exe oracle@192.168.56.118 "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+```
+
+When connecting for the first time, if you see the following prompt:
+
+```text
+Are you sure you want to continue connecting (yes/no/[fingerprint])?
+```
+
+Enter:
+
+```text
+yes
+```
+
+Then enter the password of the `oracle` user on Linux.
+
+### Test Private Key Login
+
+```cmd
+E:\OpenSSH-Win64\ssh.exe -i E:\OpenSSH-Win64\linux118.key oracle@192.168.56.118
+```
+
+After that, you can use:
+
+```cmd
+ssh -i E:\OpenSSH-Win64\linux118.key oracle@192.168.56.118
+```
+
+---
+
+## Configure sudo su - Privilege for the oracle User
+
+First, log in to Linux as the `root` user.
+
+### Create a sudoers Configuration File
+
+```bash
+su -
+
+cat > /etc/sudoers.d/oracle <<'EOF2'
+oracle ALL=(ALL) NOPASSWD: ALL
+EOF2
+
+chmod 440 /etc/sudoers.d/oracle
+visudo -cf /etc/sudoers.d/oracle
+```
+
+If the output is similar to the following, the configuration is correct:
+
+```text
+/etc/sudoers.d/oracle: parsed OK
+```
+
+### Test sudo Privilege for the oracle User
+
+```bash
+su - oracle
+sudo su -
+whoami
+```
+
+If the output is:
+
+```text
+root
+```
+
+The configuration is successful.
+
+---
+
+## 3. Configure the linux-inventory Skill
+
+You need to complete the following configuration:
+
+```json
+{
+  "host_name": "MiWiFi-R3P-srv",
+  "aliases": [
+    "23ai",
+    "23db"
+  ],
+  "ip": "192.168.56.118",
+  "ssh_key": "E:\\OpenSSH-Win64\\linux118.key",
+  "default_user": "oracle",
+  "privilege_escalation": "sudo su -",
+  "os_type": "Oracle Linux 8.10",
+  "databases": [
+    {
+      "database_name": "ORCLCDB",
+      "sqlcl_saveconnname": "orcldb",
+      "database_version": "23.0.0.0.0",
+      "oracle_home": "/opt/oracle/product/23c/dbhome_1",
+      "pdb": "Y",
+      "database_status": "OPEN"
+    }
+  ],
+  "host_status": "Running"
+}
+```
+
+You need to:
+
+- Configure the private key
+- Configure `linux-inventory.json`
+- Follow the instructions in `SKILL.md` to complete the configuration
+
+The configuration should include the host IP, private key path, host aliases, and database information.
+
+If you are worried about ambiguity, you can choose not to define aliases.  
+In that case, you need to tell the AI the exact host name or IP address.
+
+For database information, `sqlcl_saveconnname` is the saved connection name configured in the Oracle MCP Server.  
+It is used to connect to the database.
+
+After the configuration is complete, you can use natural language such as:
+
+```text
+Connect to the Linux host 23ai and check the sysctl configuration.
+```
+
+```text
+Connect to the orcldb database and check the character set.
+```
+
+Note:
+
+It is better to explicitly mention either `Linux` or `database` in the prompt.  
+Otherwise, the AI may become confused about whether it should connect to Linux or use the Oracle MCP tool to connect to the database.
+
+Currently, the default Linux user is `oracle`, which is also the database OS user.  
+The default bash configuration file is:
+
+```text
+/home/oracle/.bash_profile
+```
+
+The AI reads the configuration file by understanding the text, not by hard-coded parsing logic.  
+However, the Dashboard page parses this JSON file, so the basic JSON format must be preserved.
+
+You can add new items if needed.
+
+---
+
+## 4. Configure Oracle MCP Server
+
+Reference official documentation:
+
+`https://docs.oracle.com/en/database/oracle/sql-developer-command-line/25.4/sqcug/using-oracle-sqlcl-mcp-server.html`
+
+Oracle MCP requires JDK, and the version must be greater than 17.
+
+The most important step is to save the database connection using SQLcl, for example:
+
+```sql
+SQL> conn -save 19cdb -savepwd User123/pass123@//databaseserver:1521/orcl
+Name: 19cdb
+Connect String: //databaseserver:1521/orcl
+User: User123
+Password: ******
+Connected.
+SQL>
+```
+
+After configuration, you can test it with:
+
+```bash
+sql -name 19cdb
+```
+
+At the end of `config.json`, add a configuration similar to the following:
+
+```json
+"oracle-sqlcl": {
+  "type": "stdio",
+  "command": "E:\\sqlcl\\bin\\sql.exe",
+  "args": [
+    "-R",
+    "0",
+    "-mcp"
+  ],
+  "env": {},
+  "url": "",
+  "headers": {},
+  "toolTimeout": 30,
+  "enabledTools": [
+    "*"
+  ]
+}
+```
+
+After the configuration is complete, you can check the Tools / MCP page.  
+You should be able to see that the tool is enabled.
+
+You can then ask in natural language:
+
+```text
+Connect to the 19cdb database.
+```
+
+In a test environment, the MCP security level is set to 0, so it can execute any command or script.  
+For more details, refer to the Oracle SQLcl guide.
+
+---
+
+## 5. Apply for and Configure an AI API Key
+
+It is recommended to use DeepSeek V4 or Kimi 2.6.
+
+Other APIs have not been thoroughly tested, so you need to test them yourself.
+
+Modify:
+
+```text
+nanobot-runtime/config.json
+```
+
+Fill in the API key and the default workspace location.
+
+If you need to configure social media integration, follow the README file of the original Nanobot project.
+
+---
+
+## 6. Import and Test More Oracle Database Skills
+
+As a DBA, you have now completed two key steps:
+
+1. You can use the Windows SSH tool to connect to Linux and run commands.
+2. You can use Oracle SQLcl MCP Server to connect to the database and run commands.
+
+---
+
+## 7. Simple Test for Applying a One-Off Patch
+
+The `dba1` directory includes a one-off patch Skill.
+
+Prerequisites:
+
+1. You can connect to Linux through SSH.
+2. The Linux environment should preferably be a standard and well-configured Oracle environment, with all environment variables properly set.
+
+This avoids wasting tokens while the AI repeatedly searches for paths.
+
+Example test prompt:
+
+```text
+Install one-off patch 23399134 on the 19cdb Linux host. 
+The patch files are located in the workspace patch directory, including 23399134 and 6880880. 
+Upload them to /oracle/patch and perform the installation.
+```
+
+PS:
+
+You can upload the patch files in advance to save tokens.
+
+For detailed steps, read `SKILL.md` and modify it as needed.
+
+---
+
+## END
+
+After completing the above steps, you can continue importing and testing more Oracle Database-related Skills.
 
 
