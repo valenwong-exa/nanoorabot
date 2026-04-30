@@ -86,7 +86,8 @@ https://github.com/valenwong-exa/nanoorabot/blob/main/DBA_BEST_PRACTICE.md
 
 <img width="2308" height="892" alt="image" src="https://github.com/user-attachments/assets/7b117288-e4c2-490d-89a1-cef99e613786" />
 
-## AI交付记录审计存储在26ai数据库
+## 可选集成26ai数据库 | Integrate with Oracle 26ai（Optional）
+<img width="2530" height="859" alt="image" src="https://github.com/user-attachments/assets/98e0dd97-929c-48fd-90d1-fa0bca685083" />
 
 ## 数据库和主机危险命令防御
 
@@ -104,7 +105,9 @@ https://github.com/krisrice/oracle-db-skills
 
 ## DBA routine work SOP
 
-## 基于Oracle 26ai的RAG文档维护和向量搜索功能
+## 基于Oracle 26ai的RAG文档维护和向量搜索功能 | Oracle 26ai Vector Search
+<img width="2508" height="818" alt="image" src="https://github.com/user-attachments/assets/13b277ea-7a3d-4ea8-bf1f-b25af85a8fc8" />
+
 
 ## 连接Oracle MCP Server
 
