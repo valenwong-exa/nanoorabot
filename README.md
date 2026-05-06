@@ -85,6 +85,9 @@ https://github.com/valenwong-exa/nanoorabot/blob/main/DBA_BEST_PRACTICE.md
 ## 可管理主机和数据库列表 | Server Host and Database list
 
 <img width="2308" height="892" alt="image" src="https://github.com/user-attachments/assets/7b117288-e4c2-490d-89a1-cef99e613786" />
+Use Server list and database list to generate prompt to guide AI to connect to correct  target server or database
+<img width="2271" height="1260" alt="image" src="https://github.com/user-attachments/assets/92bcdbef-1316-40f8-adce-143093eeb9fa" />
+
 
 ## 可选集成26ai数据库 | Integrate with Oracle 26ai（Optional）
 <img width="2530" height="859" alt="image" src="https://github.com/user-attachments/assets/98e0dd97-929c-48fd-90d1-fa0bca685083" />
