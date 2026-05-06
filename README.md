@@ -109,7 +109,11 @@ https://github.com/krisrice/oracle-db-skills
 ## DBA routine work SOP
 
 ## 基于Oracle 26ai的RAG文档维护和向量搜索功能 | Oracle 26ai Vector Search
-<img width="2508" height="818" alt="image" src="https://github.com/user-attachments/assets/13b277ea-7a3d-4ea8-bf1f-b25af85a8fc8" />
+Default use QWEN or BGE-M3 model , mutiple langguages support.
+Using langchain.
+Check RAG onboard document about how to config Oracle 26ai vector search
+<img width="2318" height="1262" alt="image" src="https://github.com/user-attachments/assets/4d91caf2-2120-48e5-a2a3-2dbe397c05ac" />
+
 
 
 ## 连接Oracle MCP Server
