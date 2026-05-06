@@ -117,6 +117,8 @@ Check RAG onboard document about how to config Oracle 26ai vector search
 
 
 ## 连接Oracle MCP Server
+<img width="2306" height="365" alt="image" src="https://github.com/user-attachments/assets/4de8a1cd-5ba1-4994-a22e-984c26e7f629" />
+
 
 ## 许可证 / License
 
