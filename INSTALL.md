@@ -199,6 +199,15 @@ admin / nanobot
 - `providers`
 - `agents.defaults.model`
 - 网络连通性
+Deepseek 配置例子
+<img width="492" height="113" alt="image" src="https://github.com/user-attachments/assets/e782cd12-600e-452e-8cf2-846c21bcc92c" />
+<img width="579" height="104" alt="image" src="https://github.com/user-attachments/assets/285d4ac3-d677-43c5-85df-57001e76c2c5" />
+
+QQ robot example：
+
+<img width="483" height="155" alt="image" src="https://github.com/user-attachments/assets/121c4e29-1e1a-495c-a60f-b599635106dc" />
+
+
 
 ### bat 文件不能直接在新机器运行
 
