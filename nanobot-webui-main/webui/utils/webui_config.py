@@ -23,6 +23,12 @@ Top-level schema (all sections optional, defaults shown):
             "public_base_url": ""
         },
 
+        // Host inventory background refresh
+        "host_inventory_refresh": {
+            "enabled": false,
+            "interval_minutes": 1
+        },
+
         // Per-provider extra metadata (models lists, etc.)
         "provider_meta": {},
 
@@ -79,6 +85,10 @@ _DEFAULTS: dict[str, Any] = {
     "disabled_skills": [],
     "mcp_enabled": {},
     "s3": _S3_DEFAULTS,
+    "host_inventory_refresh": {
+        "enabled": False,
+        "interval_minutes": 1,
+    },
     "provider_meta": {},
     "users": [],
 }
@@ -230,6 +240,23 @@ def set_s3(cfg: dict[str, Any]) -> None:
     existing = {**_S3_DEFAULTS, **state.get("s3", {})}
     existing.update(cfg)
     state["s3"] = existing
+    save(state)
+
+
+# ---------------------------------------------------------------------------
+# Host inventory background refresh
+# ---------------------------------------------------------------------------
+
+def get_host_inventory_refresh() -> dict[str, Any]:
+    defaults = _DEFAULTS["host_inventory_refresh"]
+    return {**defaults, **load().get("host_inventory_refresh", {})}
+
+
+def set_host_inventory_refresh(cfg: dict[str, Any]) -> None:
+    state = load()
+    existing = {**_DEFAULTS["host_inventory_refresh"], **state.get("host_inventory_refresh", {})}
+    existing.update(cfg)
+    state["host_inventory_refresh"] = existing
     save(state)
 
 

@@ -105,6 +105,118 @@ class GatewayConfigRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Oracle DB Config
+# ---------------------------------------------------------------------------
+
+
+class OracleConfigResponse(BaseModel):
+    user: str
+    password: str
+    host: str
+    port: int
+    serviceName: str
+    dsn: str
+    connectString: str
+    configPath: str | None = None
+    updatedAt: str | None = None
+
+
+class OracleConfigRequest(BaseModel):
+    user: str
+    password: str
+    host: str
+    port: int
+    serviceName: str
+
+
+class OracleConnectionTestResponse(BaseModel):
+    success: bool
+    message: str
+    dsn: str
+    serverVersion: str | None = None
+    characterSet: str | None = None
+    isRac: bool | None = None
+    isMultitenant: bool | None = None
+
+
+# ---------------------------------------------------------------------------
+# Knowledge Base / Vector Search
+# ---------------------------------------------------------------------------
+
+
+class KnowledgeBaseHealthResponse(BaseModel):
+    status: str
+    baseUrl: str
+
+
+class KnowledgeBaseUploadResponse(BaseModel):
+    documentName: str
+    documentType: str
+    docId: int | None = None
+    inserted: bool
+    parsedChunkCount: int
+    insertedChunkCount: int
+    fullTextLength: int
+    fullTextPreview: str | None = None
+
+
+class KnowledgeBaseSearchRequest(BaseModel):
+    prompt: str = Field(..., min_length=1)
+    topK: int = Field(default=5, ge=1, le=50)
+    rerankerScore: float = Field(default=0.3, ge=0.0, le=1.0)
+    engine: Literal["qwen", "bge"] = "qwen"
+    documentType: Literal["pdf", "txt"] | None = None
+    device: Literal["auto", "cuda", "cpu"] = "auto"
+
+
+class KnowledgeBaseSearchResult(BaseModel):
+    title: str
+    score: float
+
+
+class KnowledgeBaseDocumentListItem(BaseModel):
+    docId: int
+    documentName: str
+    documentType: str
+    sourceFile: str | None = None
+    createdAt: str | None = None
+    chunkCount: int
+
+
+class KnowledgeBaseDocumentListResponse(BaseModel):
+    items: list[KnowledgeBaseDocumentListItem]
+    total: int
+    page: int
+    pageSize: int
+
+
+class KnowledgeBaseDeleteResponse(BaseModel):
+    success: bool
+    docId: int
+    deletedDocumentCount: int
+    deletedChunkCount: int
+
+
+# ---------------------------------------------------------------------------
+# Host Inventory Refresh
+# ---------------------------------------------------------------------------
+
+
+class HostInventoryRefreshConfigResponse(BaseModel):
+    enabled: bool
+    intervalMinutes: int
+    isRunning: bool
+    lastRunAt: str | None = None
+    lastSuccessAt: str | None = None
+    lastError: str | None = None
+
+
+class HostInventoryRefreshConfigRequest(BaseModel):
+    enabled: bool | None = None
+    intervalMinutes: int | None = Field(default=None, ge=1, le=1440)
+
+
+# ---------------------------------------------------------------------------
 # S3 / OSS Storage
 # ---------------------------------------------------------------------------
 

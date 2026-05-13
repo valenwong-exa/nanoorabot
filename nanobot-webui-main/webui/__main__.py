@@ -28,6 +28,21 @@ def _apply_patches() -> None:
 _apply_patches()
 
 
+def _normalize_agent_response_content(response: object) -> str | None:
+    """Extract a serializable text response from AgentLoop results."""
+    if response is None:
+        return None
+
+    content = getattr(response, "content", response)
+    if content is None:
+        return None
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(str(item) for item in content if item is not None)
+    return str(content)
+
+
 def _is_default_workspace(workspace: Path | None) -> bool:
     """Return whether a workspace resolves to nanobot's default workspace path."""
     current = workspace if workspace is not None else Path.home() / ".nanobot" / "workspace"
@@ -39,6 +54,7 @@ async def main(
     web_port: int = 18780,
     web_host: str = "0.0.0.0",
     workspace: str | None = None,
+    oracle_config: str | None = None,
     log_level: str = "DEBUG",
     webui_only: bool = False,
 ) -> None:
@@ -61,6 +77,7 @@ async def main(
 
     from webui.api.channel_ext import ExtendedChannelManager
     from webui.api.gateway import ServiceContainer, start_api_server
+    from webui.oracle_config import OracleConfigService
     from webui.patches.provider import make_provider_patched
 
     from nanobot.config.loader import get_config_path, save_config
@@ -129,10 +146,23 @@ async def main(
         cron_token = None
         if isinstance(cron_tool, CronTool):
             cron_token = cron_tool.set_cron_context(True)
+
+        # Web-delivered jobs store the target session key in payload.to.
+        # This can be a native web session (``web:<user_id>:<hex>``) or any
+        # other session the admin is currently viewing (for example ``cli:direct``).
+        to = job.payload.to or ""
+        is_web_delivery = job.payload.channel == "web" and bool(to)
+        is_web_session = is_web_delivery and to.startswith("web:")
+        is_web = job.payload.channel == "web" and bool(to)
+
+        # Always execute in an isolated timestamped session so:
+        #   1. Each run gets a clean LLM context
+        #   2. The internal trigger message never pollutes the user's chat session
+        exec_session_key = f"cron:{job.id}:{int(time.time() * 1000)}"
         try:
             response = await agent.process_direct(
                 reminder_note,
-                session_key=f"cron:{job.id}:{int(time.time() * 1000)}",
+                session_key=exec_session_key,
                 channel=job.payload.channel or "cli",
                 chat_id=job.payload.to or "direct",
             )
@@ -140,17 +170,47 @@ async def main(
             if isinstance(cron_tool, CronTool) and cron_token is not None:
                 cron_tool.reset_cron_context(cron_token)
 
+        response_text = _normalize_agent_response_content(response)
+
         message_tool = agent.tools.get("message")
         if isinstance(message_tool, MessageTool) and message_tool._sent_in_turn:
-            return response
+            return response_text
 
-        if job.payload.deliver and job.payload.to and response:
+        if job.payload.deliver and job.payload.to and response_text:
             await bus.publish_outbound(OutboundMessage(
                 channel=job.payload.channel or "cli",
                 chat_id=job.payload.to,
-                content=response,
+                content=response_text,
             ))
-        return response
+
+        # For Web-delivered jobs: append only the final AI response to the
+        # target session so the scheduled trigger message stays isolated in the
+        # internal cron execution session.
+        if is_web_delivery and response_text:
+            from datetime import datetime
+
+            orig_sess = agent.sessions.get_or_create(to)
+            orig_sess.messages.append({
+                "role": "assistant",
+                "content": response_text,
+            })
+            orig_sess.updated_at = datetime.now()
+            agent.sessions.save(orig_sess)
+
+        # Push result to active WebSocket connections so the browser can
+        # refresh the affected session without polling the cron execution session.
+        if is_web and response_text:
+            from webui.api.routes.ws import push_cron_result
+
+            notify_session = to if is_web_delivery else exec_session_key
+            await push_cron_result(notify_session, {
+                "type": "cron_result",
+                "job_id": job.id,
+                "job_name": job.name,
+                "content": response_text,
+                "session_key": notify_session,
+            })
+        return response_text
 
     cron.on_job = on_cron_job
 
@@ -211,6 +271,9 @@ async def main(
         session_manager=session_manager,
         cron=cron,
         heartbeat=heartbeat,
+        oracle_config=OracleConfigService(
+            Path(oracle_config).expanduser().resolve(strict=False) if oracle_config else None
+        ),
         make_provider=make_provider_patched,
         webui_only=webui_only,
     )
@@ -268,6 +331,8 @@ def main_cli() -> None:
     parser.add_argument("--port", type=int, default=18780, help="WebUI port (default: 18780)")
     parser.add_argument("--host", default="0.0.0.0", help="Bind address (default: 0.0.0.0)")
     parser.add_argument("--workspace", default=None, help="Override workspace directory")
+    parser.add_argument("--oracle-config", default=None, dest="oracle_config",
+                        help="Path to Oracle DB connection JSON file")
     parser.add_argument("--config", default=None, dest="config_path",
                         help="Path to config file")
     parser.add_argument("--daemon", "-d", action="store_true", default=False,
@@ -287,6 +352,7 @@ def main_cli() -> None:
             port=args.port,
             host=args.host,
             workspace=args.workspace,
+            oracle_config=args.oracle_config,
             config_path=args.config_path,
         )
         return
@@ -299,6 +365,7 @@ def main_cli() -> None:
         web_port=args.port,
         web_host=args.host,
         workspace=args.workspace,
+        oracle_config=args.oracle_config,
         log_level=args.log_level,
         webui_only=args.webui_only,
     ))

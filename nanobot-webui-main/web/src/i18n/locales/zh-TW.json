@@ -25,7 +25,9 @@
       "admin": "管理員",
       "user": "使用者"
     },
-    "soul": "靈魂"
+    "soul": "靈魂",
+    "databaseConfig": "資料庫配置",
+    "knowledgeBase": "知識庫"
   },
   "host": {
     "title": "主機",
@@ -199,7 +201,10 @@
       "openExternal": "在新分頁開啟",
       "download": "下載檔案",
       "unsupported": "此檔案類型暫不支援內嵌預覽，請使用上方下載按鈕取得檔案。"
-    }
+    },
+    "hostList": "主機列表",
+    "expandHostList": "展開主機列表",
+    "collapseHostList": "摺疊主機列表"
   },
   "providers": {
     "title": "模型供應商",
@@ -594,5 +599,189 @@
     "editorDesc": "修改後點擊儲存，即可同步更新工作空間中的 SOUL.md。",
     "lineCount": "{{count}} 行",
     "synced": "已與檔案同步"
+  },
+  "knowledgeBase": {
+    "title": "知识库",
+    "subtitle": "上传 PDF/TXT 文档到 Oracle 向量库，并基于 title 模式执行文档级检索。",
+    "badge": "Oracle Vector Search",
+    "engineLabel": "模型引擎",
+    "engines": {
+      "qwen": "Qwen",
+      "bge": "BGE"
+    },
+    "engineBadge": "当前引擎：{{engine}}",
+    "tableBindingTitle": "当前绑定表",
+    "ingestTitle": "文档入库",
+    "ingestDescription": "通过 WebUI 代理调用向量 API，完成文档解析、切分、embedding 和入库。",
+    "apiEndpoint": "API 地址",
+    "deviceLabel": "推理设备",
+    "devices": {
+      "auto": "自动",
+      "cuda": "CUDA",
+      "cpu": "CPU"
+    },
+    "sourceFileLabel": "来源标记",
+    "sourceFilePlaceholder": "例如 webui",
+    "uploadLabel": "上传文档",
+    "supportedTypes": "当前仅支持 .pdf 和 .txt 文件。",
+    "pendingFiles": "待上传文件",
+    "uploadEmpty": "还没有待处理文件。",
+    "uploadButton": "开始上传",
+    "searchTitle": "Vector Search",
+    "searchDescription": "固定使用 title 返回模式，只展示文档名和 reranker 分数。",
+    "searchLabel": "检索问题",
+    "searchPlaceholder": "例如：how to tuning network performance for data guard",
+    "searchButton": "搜索",
+    "topKLabel": "TopK",
+    "scoreLabel": "Score",
+    "documentTypeLabel": "文档类型",
+    "documentTypes": {
+      "all": "全部",
+      "pdf": "PDF",
+      "txt": "TXT"
+    },
+    "currentModeTitle": "返回模式",
+    "currentModeValue": "固定为 title，仅返回文档名与 score。",
+    "documentTypeBadge": "类型筛选：{{type}}",
+    "resultCount": "命中结果：{{count}}",
+    "resultTitle": "搜索结果",
+    "resultDescription": "下方表格只显示文档名和 score，便于快速确认召回是否准确。",
+    "healthTitle": "API 状态",
+    "healthHealthy": "向量 API 已连接，可以直接上传和搜索。",
+    "healthUnavailable": "无法连接向量 API，请确认目标服务仍在运行。",
+    "statusChecking": "检查中",
+    "statusConnected": "API 已连接",
+    "statusDisconnected": "API 未连接",
+    "uploadResultsTitle": "最近上传",
+    "uploadResultsCount": "最近保留 {{count}} 条上传结果。",
+    "noResults": "当前条件下没有命中任何文档。",
+    "searchEmpty": "输入问题并执行搜索后，这里会显示命中的文档名和分数。",
+    "table": {
+      "title": "文档名",
+      "rerankScore": "Score"
+    },
+    "uploadTable": {
+      "title": "文档名",
+      "status": "状态",
+      "chunks": "Chunks",
+      "length": "全文长度：{{count}}"
+    },
+    "uploadStatus": {
+      "inserted": "已入库",
+      "duplicate": "已存在"
+    },
+    "documentListTitle": "文档列表",
+    "documentListDescription": "从当前引擎绑定的文档表读取清单，支持分页、筛选和删除。",
+    "documentTotal": "总文档数：{{count}}",
+    "documentListSearchPlaceholder": "按文档名过滤列表...",
+    "filterButton": "筛选",
+    "pageSizeLabel": "每页条数",
+    "pageSizeOption": "{{count}} 条/页",
+    "documentsTable": {
+      "title": "文档名",
+      "type": "类型",
+      "chunks": "Chunks",
+      "createdAt": "创建时间",
+      "actions": "操作"
+    },
+    "documentListEmpty": "当前筛选条件下没有文档。",
+    "paginationSummary": "第 {{page}} / {{totalPages}} 页，共 {{total}} 条",
+    "prevPage": "上一页",
+    "nextPage": "下一页",
+    "deleteDocument": "删除文档",
+    "messages": {
+      "selectFilesFirst": "请先选择要上传的文件。",
+      "invalidFileType": "仅允许上传 .pdf 和 .txt 文件。",
+      "uploadFailed": "文档上传失败。",
+      "uploadSuccess": "已处理 {{count}} 个文件，其中新入库 {{inserted}} 个，重复跳过 {{duplicates}} 个。",
+      "uploadPartialFailed": "还有 {{count}} 个文件上传失败，请查看错误提示。",
+      "searchPromptRequired": "请输入检索问题。",
+      "searchFailed": "向量搜索失败。",
+      "searching": "正在执行向量搜索...",
+      "loadingDocuments": "正在读取文档列表...",
+      "confirmDelete": "确定删除文档 {{name}} 吗？将同时删除文档主表和分片表中的数据。",
+      "deleteSuccess": "文档已删除。",
+      "deleteFailed": "删除文档失败。"
+    }
+  },
+  "databaseConfig": {
+    "title": "資料庫配置",
+    "subtitle": "管理 Oracle 26ai 資料庫連線參數與存取配置。",
+    "badge": "Oracle 26ai",
+    "platform": "Oracle Vector Platform",
+    "heroTitle": "Oracle 26ai database",
+    "heroDescription": "配置資料庫主機、連接埠、服務名稱與驗證資訊，統一管理連線入口。",
+    "capabilityTitle": "目標能力",
+    "tags": {
+      "vector": "向量庫",
+      "rag": "RAG",
+      "memory": "記憶",
+      "audit": "稽核"
+    },
+    "formTitle": "Oracle 26ai 連線參數",
+    "formDescription": "維護資料庫連線所需的基礎參數與驗證資訊。",
+    "fields": {
+      "user": "使用者名稱",
+      "password": "密碼",
+      "host": "IP 位址",
+      "port": "連接埠",
+      "serviceName": "Service Name"
+    },
+    "placeholders": {
+      "user": "例如 vector_admin",
+      "password": "請輸入資料庫密碼",
+      "host": "例如 192.168.56.101",
+      "serviceName": "例如 FREEPDB1"
+    },
+    "buttons": {
+      "test": "測試連線",
+      "save": "儲存配置"
+    },
+    "previewTitle": "配置預覽",
+    "previewDescription": "目前連線資訊概覽。",
+    "snapshotTitle": "Connection Snapshot",
+    "snapshot": {
+      "user": "User",
+      "host": "Host",
+      "port": "Port",
+      "service": "Service",
+      "dsn": "DSN"
+    },
+    "abilitiesTitle": "連線能力",
+    "abilities": {
+      "connectionTest": "資料庫連線測試",
+      "saveConfig": "連線參數儲存",
+      "serviceManagement": "服務名稱統一管理",
+      "credentials": "存取憑證維護",
+      "preview": "連線資訊預覽"
+    },
+    "serverVersion": "伺服器版本",
+    "runtimeTitle": "執行資訊",
+    "runtime": {
+      "configPath": "設定檔",
+      "connectString": "連線字串",
+      "updatedAt": "更新時間",
+      "notAvailable": "未提供"
+    },
+    "messages": {
+      "saveSuccess": "Oracle 連線設定已儲存。",
+      "saveFailed": "儲存 Oracle 連線設定失敗。",
+      "testSuccess": "Oracle 連線測試成功。",
+      "testFailed": "Oracle 連線測試失敗。",
+      "loading": "正在讀取 Oracle 設定...",
+      "notTested": "尚未執行連線測試。",
+      "metadataPending": "執行連線測試後顯示資料庫版本、字元集、RAC 與多租戶資訊。"
+    },
+    "metadataTitle": "資料庫特徵",
+    "metadata": {
+      "serverVersion": "資料庫版本",
+      "characterSet": "字元集",
+      "rac": "RAC",
+      "multitenant": "多租戶"
+    },
+    "values": {
+      "yes": "是",
+      "no": "否"
+    }
   }
 }

@@ -25,7 +25,9 @@
       "admin": "관리자",
       "user": "사용자"
     },
-    "soul": "영혼"
+    "soul": "영혼",
+    "databaseConfig": "데이터베이스 설정",
+    "knowledgeBase": "지식 베이스"
   },
   "host": {
     "title": "호스트",
@@ -199,7 +201,10 @@
       "openExternal": "새 탭에서 열기",
       "download": "파일 다운로드",
       "unsupported": "이 파일 형식은 인라인 미리보기를 지원하지 않습니다. 위의 다운로드 버튼을 사용하세요."
-    }
+    },
+    "hostList": "호스트 목록",
+    "expandHostList": "호스트 목록 펼치기",
+    "collapseHostList": "호스트 목록 접기"
   },
   "providers": {
     "title": "모델 제공자",
@@ -594,5 +599,189 @@
     "editorDesc": "내용을 수정한 뒤 저장하면 작업 공간의 SOUL.md 와 동기화됩니다.",
     "lineCount": "{{count}}줄",
     "synced": "파일과 동기화됨"
+  },
+  "knowledgeBase": {
+    "title": "Knowledge Base",
+    "subtitle": "Upload PDF/TXT documents into Oracle Vector Search and run title-mode document retrieval.",
+    "badge": "Oracle Vector Search",
+    "engineLabel": "Model Engine",
+    "engines": {
+      "qwen": "Qwen",
+      "bge": "BGE"
+    },
+    "engineBadge": "Current Engine: {{engine}}",
+    "tableBindingTitle": "Bound Tables",
+    "ingestTitle": "Document Ingestion",
+    "ingestDescription": "Calls the vector API through the WebUI proxy to parse, chunk, embed, and store documents.",
+    "apiEndpoint": "API Endpoint",
+    "deviceLabel": "Device",
+    "devices": {
+      "auto": "Auto",
+      "cuda": "CUDA",
+      "cpu": "CPU"
+    },
+    "sourceFileLabel": "Source Tag",
+    "sourceFilePlaceholder": "For example: webui",
+    "uploadLabel": "Upload Documents",
+    "supportedTypes": "Only .pdf and .txt files are supported right now.",
+    "pendingFiles": "Pending Files",
+    "uploadEmpty": "No files are waiting to be uploaded.",
+    "uploadButton": "Start Upload",
+    "searchTitle": "Vector Search",
+    "searchDescription": "Uses the title return mode and only shows document names with reranker scores.",
+    "searchLabel": "Search Prompt",
+    "searchPlaceholder": "For example: how to tuning network performance for data guard",
+    "searchButton": "Search",
+    "topKLabel": "TopK",
+    "scoreLabel": "Score",
+    "documentTypeLabel": "Document Type",
+    "documentTypes": {
+      "all": "All",
+      "pdf": "PDF",
+      "txt": "TXT"
+    },
+    "currentModeTitle": "Return Mode",
+    "currentModeValue": "Fixed to title, returning only the document name and score.",
+    "documentTypeBadge": "Type Filter: {{type}}",
+    "resultCount": "Results: {{count}}",
+    "resultTitle": "Search Results",
+    "resultDescription": "The table below only shows document names and scores for quick relevance review.",
+    "healthTitle": "API Health",
+    "healthHealthy": "The vector API is reachable and ready for uploads and search.",
+    "healthUnavailable": "The vector API is unavailable. Verify that the selected service is still running.",
+    "statusChecking": "Checking",
+    "statusConnected": "API Connected",
+    "statusDisconnected": "API Disconnected",
+    "uploadResultsTitle": "Recent Uploads",
+    "uploadResultsCount": "Keeps the latest {{count}} upload results.",
+    "noResults": "No documents matched the current search.",
+    "searchEmpty": "Run a search to see matching document names and scores here.",
+    "table": {
+      "title": "Document Name",
+      "rerankScore": "Score"
+    },
+    "uploadTable": {
+      "title": "Document Name",
+      "status": "Status",
+      "chunks": "Chunks",
+      "length": "Full text length: {{count}}"
+    },
+    "uploadStatus": {
+      "inserted": "Inserted",
+      "duplicate": "Duplicate"
+    },
+    "documentListTitle": "Document List",
+    "documentListDescription": "Reads documents from the tables bound to the selected engine, with paging, filtering, and deletion.",
+    "documentTotal": "Total Documents: {{count}}",
+    "documentListSearchPlaceholder": "Filter by document name...",
+    "filterButton": "Filter",
+    "pageSizeLabel": "Page Size",
+    "pageSizeOption": "{{count}} / page",
+    "documentsTable": {
+      "title": "Document Name",
+      "type": "Type",
+      "chunks": "Chunks",
+      "createdAt": "Created At",
+      "actions": "Actions"
+    },
+    "documentListEmpty": "No documents match the current filters.",
+    "paginationSummary": "Page {{page}} / {{totalPages}}, total {{total}}",
+    "prevPage": "Previous",
+    "nextPage": "Next",
+    "deleteDocument": "Delete Document",
+    "messages": {
+      "selectFilesFirst": "Select one or more files before uploading.",
+      "invalidFileType": "Only .pdf and .txt files can be uploaded.",
+      "uploadFailed": "Document upload failed.",
+      "uploadSuccess": "Processed {{count}} file(s): {{inserted}} inserted, {{duplicates}} skipped as duplicates.",
+      "uploadPartialFailed": "{{count}} file(s) failed to upload. Check the error details.",
+      "searchPromptRequired": "Enter a search prompt first.",
+      "searchFailed": "Vector search failed.",
+      "searching": "Running vector search...",
+      "loadingDocuments": "Loading document list...",
+      "confirmDelete": "Delete document {{name}}? This removes rows from both the document and chunk tables.",
+      "deleteSuccess": "Document deleted.",
+      "deleteFailed": "Failed to delete document."
+    }
+  },
+  "databaseConfig": {
+    "title": "데이터베이스 설정",
+    "subtitle": "Oracle 26ai 데이터베이스 연결 파라미터와 접근 설정을 관리합니다.",
+    "badge": "Oracle 26ai",
+    "platform": "Oracle Vector Platform",
+    "heroTitle": "Oracle 26ai database",
+    "heroDescription": "데이터베이스 호스트, 포트, 서비스 이름 및 인증 정보를 한 곳에서 구성합니다.",
+    "capabilityTitle": "대상 기능",
+    "tags": {
+      "vector": "벡터 DB",
+      "rag": "RAG",
+      "memory": "메모리",
+      "audit": "감사"
+    },
+    "formTitle": "Oracle 26ai 연결 파라미터",
+    "formDescription": "데이터베이스 접근에 필요한 기본 연결 파라미터와 인증 정보를 관리합니다.",
+    "fields": {
+      "user": "사용자명",
+      "password": "비밀번호",
+      "host": "IP 주소",
+      "port": "포트",
+      "serviceName": "Service Name"
+    },
+    "placeholders": {
+      "user": "예: vector_admin",
+      "password": "데이터베이스 비밀번호를 입력하세요",
+      "host": "예: 192.168.56.101",
+      "serviceName": "예: FREEPDB1"
+    },
+    "buttons": {
+      "test": "연결 테스트",
+      "save": "설정 저장"
+    },
+    "previewTitle": "설정 미리보기",
+    "previewDescription": "현재 연결 정보 개요입니다.",
+    "snapshotTitle": "Connection Snapshot",
+    "snapshot": {
+      "user": "User",
+      "host": "Host",
+      "port": "Port",
+      "service": "Service",
+      "dsn": "DSN"
+    },
+    "abilitiesTitle": "연결 기능",
+    "abilities": {
+      "connectionTest": "데이터베이스 연결 테스트",
+      "saveConfig": "연결 파라미터 저장",
+      "serviceManagement": "서비스 이름 통합 관리",
+      "credentials": "자격 증명 관리",
+      "preview": "연결 정보 미리보기"
+    },
+    "serverVersion": "서버 버전",
+    "runtimeTitle": "실행 정보",
+    "runtime": {
+      "configPath": "설정 파일",
+      "connectString": "연결 문자열",
+      "updatedAt": "업데이트 시간",
+      "notAvailable": "없음"
+    },
+    "messages": {
+      "saveSuccess": "Oracle 연결 설정을 저장했습니다.",
+      "saveFailed": "Oracle 연결 설정 저장에 실패했습니다.",
+      "testSuccess": "Oracle 연결 테스트에 성공했습니다.",
+      "testFailed": "Oracle 연결 테스트에 실패했습니다.",
+      "loading": "Oracle 설정을 불러오는 중입니다...",
+      "notTested": "연결 테스트를 아직 실행하지 않았습니다.",
+      "metadataPending": "연결 테스트를 실행하면 데이터베이스 버전, 문자 집합, RAC 및 멀티테넌트 정보를 표시합니다."
+    },
+    "metadataTitle": "데이터베이스 정보",
+    "metadata": {
+      "serverVersion": "데이터베이스 버전",
+      "characterSet": "문자 집합",
+      "rac": "RAC",
+      "multitenant": "멀티테넌트"
+    },
+    "values": {
+      "yes": "예",
+      "no": "아니오"
+    }
   }
 }

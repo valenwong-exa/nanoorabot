@@ -131,11 +131,12 @@ const CATEGORY_LABEL: Record<FileCategory, string> = {
 
 interface ArtifactPreviewProps {
   filePath: string;
+  defaultExpanded?: boolean;
 }
 
-export function ArtifactPreview({ filePath }: ArtifactPreviewProps) {
+export function ArtifactPreview({ filePath, defaultExpanded = false }: ArtifactPreviewProps) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [textContent, setTextContent] = useState<string | null>(null);
@@ -211,12 +212,14 @@ export function ArtifactPreview({ filePath }: ArtifactPreviewProps) {
     };
   }, []);
 
-  const handleToggle = () => {
-    const nextExpanded = !expanded;
-    setExpanded(nextExpanded);
-    if (nextExpanded && !textContent && !blobUrl && !loading) {
+  useEffect(() => {
+    if (expanded && !textContent && !blobUrl && !loading && !error) {
       void fetchContent();
     }
+  }, [expanded, textContent, blobUrl, loading, error]);
+
+  const handleToggle = () => {
+    setExpanded((prev) => !prev);
   };
 
   return (

@@ -4,7 +4,7 @@ import { nanoid } from "nanoid";
 import { useQueryClient } from "@tanstack/react-query";
 import { useChatStore } from "../../stores/chatStore";
 import { ChatWebSocket, type WsMessage } from "../../lib/ws";
-import { MessageBubble, extractArtifactPaths } from "./MessageBubble";
+import { MessageBubble, shouldShowArtifactPreview } from "./MessageBubble";
 import { ChatInput } from "./ChatInput";
 import { useRevokeMessage } from "../../hooks/useSessions";
 
@@ -35,7 +35,7 @@ export function ChatWindow() {
     : messages.filter((m) => {
         if (m.role !== "tool" && m.role !== "sub_tool" && m.role !== "system") return true;
         if (m.role === "tool" || m.role === "sub_tool") {
-          return extractArtifactPaths(m.content).length > 0;
+          return shouldShowArtifactPreview(m);
         }
         return false;
       });
@@ -164,6 +164,12 @@ export function ChatWindow() {
         const targetKey = msgSessionKey || currentKey || "";
         qc.invalidateQueries({ queryKey: ["sessions", targetKey, "messages"] });
         qc.invalidateQueries({ queryKey: ["sessions"] });
+      } else if (msg.type === "cron_result") {
+        const targetKey = msgSessionKey || currentKey || "";
+        qc.invalidateQueries({ queryKey: ["sessions"] });
+        if (targetKey) {
+          qc.invalidateQueries({ queryKey: ["sessions", targetKey, "messages"] });
+        }
       }
     },
     [addMessage, qc, setCurrentSession, setProgress, setWaiting, t]
@@ -184,6 +190,7 @@ export function ChatWindow() {
         role: "user",
         content: displayContent,
         timestamp: new Date().toISOString(),
+        mediaPaths: media && media.length > 0 ? media : undefined,
       });
       const key = currentSessionKey ?? "";
       setWaiting(true, key);

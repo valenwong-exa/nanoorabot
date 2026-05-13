@@ -17,6 +17,8 @@ import {
   Settings,
   Users,
   FileJson,
+  Database,
+  PlugZap,
   Sun,
   Moon,
   Languages,
@@ -61,6 +63,8 @@ const ADMIN_ITEMS: NavItem[] = [
   { path: "/system-config", label: "nav.systemConfig", icon: FileJson },
   { path: "/audit", label: "nav.audit", icon: ScrollText },
   { path: "/defense", label: "nav.defense", icon: Shield },
+  { path: "/database-config", label: "nav.databaseConfig", icon: PlugZap },
+  { path: "/knowledge-base", label: "nav.knowledgeBase", icon: Database },
 ];
 
 function NavLink({ item, active, collapsed }: { item: NavItem; active: boolean; collapsed: boolean }) {

@@ -7,6 +7,7 @@ import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { cn } from "../../lib/utils";
 import { uploadFile } from "../../hooks/useConfig";
+import { useChatStore } from "../../stores/chatStore";
 
 const MODEL_IMAGE_EXTENSIONS = new Set([
   ".jpeg",
@@ -41,8 +42,15 @@ interface Attachment {
   name: string;
   url?: string;
   localPath?: string;
+  previewUrl?: string;
   sendAsMedia?: boolean;
   uploading: boolean;
+}
+
+function revokePreviewUrl(url?: string) {
+  if (url?.startsWith("blob:")) {
+    URL.revokeObjectURL(url);
+  }
 }
 
 interface ChatInputProps {
@@ -65,11 +73,17 @@ export function ChatInput({
   onToggleToolMessages,
 }: ChatInputProps) {
   const { t } = useTranslation();
-  const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isVoiceOverlayOpen, setIsVoiceOverlayOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachmentsRef = useRef<Attachment[]>([]);
+  const currentSessionKey = useChatStore((s) => s.currentSessionKey);
+  const value = useChatStore((s) =>
+    s.currentSessionKey ? (s.draftMessages[s.currentSessionKey] ?? "") : "",
+  );
+  const setDraftMessage = useChatStore((s) => s.setDraftMessage);
+  const setDraftSelection = useChatStore((s) => s.setDraftSelection);
 
   const MAX_TEXTAREA_H = 240;
   useLayoutEffect(() => {
@@ -90,7 +104,8 @@ export function ChatInput({
   const handleFilesSelected = useCallback(async (files: File[]) => {
     for (const file of files) {
       const id = nanoid();
-      setAttachments((prev) => [...prev, { id, name: file.name, uploading: true }]);
+      const previewUrl = isModelImageFile(file.name) ? URL.createObjectURL(file) : undefined;
+      setAttachments((prev) => [...prev, { id, name: file.name, previewUrl, uploading: true }]);
       try {
         const uploaded = await uploadFile(file);
         const isImage = isModelImageFile(file.name);
@@ -110,7 +125,11 @@ export function ChatInput({
       } catch (err: unknown) {
         const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
         toast.error(detail ?? t("chat.uploadFailed"));
-        setAttachments((prev) => prev.filter((a) => a.id !== id));
+        setAttachments((prev) => {
+          const target = prev.find((a) => a.id === id);
+          revokePreviewUrl(target?.previewUrl);
+          return prev.filter((a) => a.id !== id);
+        });
       }
     }
   }, [t]);
@@ -153,21 +172,34 @@ export function ChatInput({
     }
 
     onSend(content.trim(), media);
-    setValue("");
+    setDraftMessage("", currentSessionKey ?? undefined);
+    setDraftSelection(0, 0, currentSessionKey ?? undefined);
+    attachments.forEach((att) => revokePreviewUrl(att.previewUrl));
     setAttachments([]);
     if (textareaRef.current) {
       textareaRef.current.style.height = "52px";
       textareaRef.current.style.overflowY = "hidden";
     }
-  }, [value, attachments, disabled, isUploading, onSend]);
+  }, [value, attachments, disabled, isUploading, onSend, setDraftMessage, currentSessionKey, setDraftSelection]);
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setValue(e.target.value);
+    setDraftMessage(e.target.value, currentSessionKey ?? undefined);
+    setDraftSelection(e.target.selectionStart ?? e.target.value.length, e.target.selectionEnd ?? e.target.value.length, currentSessionKey ?? undefined);
     // height adjustment is handled by useLayoutEffect
   };
 
+  const syncSelection = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    setDraftSelection(el.selectionStart ?? value.length, el.selectionEnd ?? value.length, currentSessionKey ?? undefined);
+  };
+
   const removeAttachment = (id: string) =>
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
+    setAttachments((prev) => {
+      const target = prev.find((a) => a.id === id);
+      revokePreviewUrl(target?.previewUrl);
+      return prev.filter((a) => a.id !== id);
+    });
 
   const canSend = (value.trim().length > 0 || attachments.filter((a) => a.url).length > 0) && !isUploading;
 
@@ -182,6 +214,16 @@ export function ChatInput({
       window.clearTimeout(timer);
     };
   }, [isVoiceOverlayOpen]);
+
+  useEffect(() => {
+    attachmentsRef.current = attachments;
+  }, [attachments]);
+
+  useEffect(() => {
+    return () => {
+      attachmentsRef.current.forEach((att) => revokePreviewUrl(att.previewUrl));
+    };
+  }, []);
 
   return (
     <>
@@ -218,33 +260,65 @@ export function ChatInput({
         )}>
           {/* Attachment chips */}
           {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 px-4 pt-3">
+            <div className="flex flex-wrap gap-2 px-4 pt-3">
               {attachments.map((att) => {
                 const isImage = isModelImageFile(att.name);
+                const previewSrc = att.previewUrl ?? att.url;
                 return (
-                  <div
-                    key={att.id}
-                    className="flex items-center gap-1.5 rounded-lg border bg-muted/60 px-2.5 py-1 text-xs"
-                  >
-                    {att.uploading ? (
-                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                    ) : isImage ? (
-                      <ImageIcon className="h-3 w-3 text-primary" />
-                    ) : (
-                      <FileText className="h-3 w-3 text-primary" />
-                    )}
-                    <span className="max-w-[140px] truncate text-muted-foreground">
-                      {att.uploading ? t("chat.uploading") : att.name}
-                    </span>
-                    {!att.uploading && (
-                      <button
-                        onClick={() => removeAttachment(att.id)}
-                        className="ml-0.5 rounded-sm text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
+                  isImage ? (
+                    <div
+                      key={att.id}
+                      className="group relative h-24 w-24 overflow-hidden rounded-xl border bg-muted/40 shadow-sm"
+                    >
+                      {previewSrc ? (
+                        <img src={previewSrc} alt={att.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-muted/60">
+                          <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/35 to-transparent px-2 pb-1.5 pt-4">
+                        <span className="block truncate text-[11px] text-white">
+                          {att.uploading ? t("chat.uploading") : att.name}
+                        </span>
+                      </div>
+                      {att.uploading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/25 backdrop-blur-[1px]">
+                          <Loader2 className="h-5 w-5 animate-spin text-white" />
+                        </div>
+                      )}
+                      {!att.uploading && (
+                        <button
+                          onClick={() => removeAttachment(att.id)}
+                          className="absolute right-1.5 top-1.5 rounded-full bg-black/55 p-1 text-white opacity-90 transition hover:bg-black/70"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      key={att.id}
+                      className="flex items-center gap-1.5 rounded-lg border bg-muted/60 px-2.5 py-1 text-xs"
+                    >
+                      {att.uploading ? (
+                        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                      ) : (
+                        <FileText className="h-3 w-3 text-primary" />
+                      )}
+                      <span className="max-w-[140px] truncate text-muted-foreground">
+                        {att.uploading ? t("chat.uploading") : att.name}
+                      </span>
+                      {!att.uploading && (
+                        <button
+                          onClick={() => removeAttachment(att.id)}
+                          className="ml-0.5 rounded-sm text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  )
                 );
               })}
             </div>
@@ -266,6 +340,9 @@ export function ChatInput({
               onChange={handleInput}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
+              onSelect={syncSelection}
+              onClick={syncSelection}
+              onKeyUp={syncSelection}
               placeholder={t("chat.placeholder")}
               rows={1}
               className="resize-none border-0 bg-transparent pl-14 pr-4 py-3.5 shadow-none focus-visible:ring-0 text-base leading-relaxed w-full"

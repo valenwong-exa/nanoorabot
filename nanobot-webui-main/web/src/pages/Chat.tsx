@@ -3,13 +3,14 @@ import { useTranslation } from "react-i18next";
 import { ChatWindow } from "../components/chat/ChatWindow";
 import { useChatStore, type ChatMessage } from "../stores/chatStore";
 import { useSessions, useSessionMessages } from "../hooks/useSessions";
+import { useHostInventory } from "../hooks/useHostInventory";
 import { useAuthStore } from "../stores/authStore";
 import { useDeleteSession } from "../hooks/useSessions";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { nanoid } from "nanoid";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { ArrowLeft, MessageSquare, Plus, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, MessageSquare, Plus, Search, Trash2 } from "lucide-react";
 import { cn, formatDate } from "../lib/utils";
 
 import { CHANNEL_ICONS } from "../lib/channelIcons";
@@ -19,6 +20,34 @@ function channelOf(key: string): string {
   return key.split(":")[0] ?? "web";
 }
 
+function getHostStatusTone(status?: string): string {
+  switch ((status ?? "").toLowerCase()) {
+    case "running":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300";
+    case "unable login":
+    case "invalid":
+      return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300";
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300";
+  }
+}
+
+function getDatabaseStatusTone(status?: string): string {
+  switch ((status ?? "").toUpperCase()) {
+    case "OPEN":
+    case "MOUNTED":
+    case "STARTED":
+    case "RUNNING":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300";
+    case "INVALID":
+    case "DOWN":
+    case "FAILED":
+      return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300";
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300";
+  }
+}
+
 export default function Chat() {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
@@ -26,10 +55,11 @@ export default function Chat() {
   // On mobile: track whether the user is viewing the chat window (true) or session list (false)
   const mobileShowChat = useChatStore((s) => s.mobileShowChat);
   const setMobileShowChat = useChatStore((s) => s.setMobileShowChat);
-  const { currentSessionKey, setCurrentSession, setMessages } = useChatStore();
+  const { currentSessionKey, setCurrentSession, setMessages, insertDraftMessage } = useChatStore();
   const sessionStates = useChatStore((s) => s.sessionStates);
   const { data: sessions } = useSessions();
   const { data: sessionMsgs, isSuccess: historyLoaded } = useSessionMessages(currentSessionKey ?? "");
+  const { data: hostInventory } = useHostInventory({ refetchInterval: 30000 });
   const deleteSession = useDeleteSession();
   const loadedKeyRef = useRef<string | null>(null);
   const loadedCountRef = useRef<number>(0);
@@ -100,6 +130,7 @@ export default function Chat() {
   const isAdmin = user?.role === "admin";
   const myPrefix = `web:${user?.id}:`;
   const [search, setSearch] = useState("");
+  const [hostPanelCollapsed, setHostPanelCollapsed] = useState(false);
   // Admins see all sessions; regular users see only their own web sessions
   const mySessions = useMemo(
     () =>
@@ -146,6 +177,8 @@ export default function Chat() {
     });
   }, [displaySessions, search]);
 
+  const hosts = hostInventory?.hosts ?? [];
+
   const newChat = () => {
     const hexId = Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) =>
       b.toString(16).padStart(2, "0")
@@ -163,6 +196,34 @@ export default function Chat() {
     if (isMobile) setMobileShowChat(true);
   };
 
+  const handleHostPromptInsert = (hostName: string) => {
+    insertDraftMessage(`Please connect to server ${hostName},`);
+    if (isMobile) {
+      setMobileShowChat(true);
+    }
+  };
+
+  const handleDatabasePromptInsert = (
+    hostName?: string,
+    sqlclSaveconnname?: string,
+    databaseName?: string,
+    databaseStatus?: string
+  ) => {
+    const connectionName = sqlclSaveconnname || databaseName;
+    if (!connectionName && !databaseName) {
+      return;
+    }
+    const normalizedStatus = (databaseStatus ?? "").toUpperCase();
+    const prompt =
+      normalizedStatus === "INVALID"
+        ? `Please conect to server ${hostName ?? ""}, check  status of database_name ${databaseName ?? connectionName} , if it is down , startup database and listener.`
+        : `Please use oracle sqlcl MCP tool to connect to database ${connectionName},`;
+    insertDraftMessage(prompt);
+    if (isMobile) {
+      setMobileShowChat(true);
+    }
+  };
+
   return (
     <div className={cn(
       "flex min-h-0",
@@ -178,144 +239,259 @@ export default function Chat() {
         )}
         style={isMobile ? undefined : { width: "13rem", minWidth: 0, maxWidth: "13rem", boxShadow: "var(--shadow-card)" }}
       >
-        {/* Header row — desktop only; mobile title is hidden, FAB used instead */}
-        {!isMobile && (
-          <div className="flex shrink-0 items-center justify-between px-3 py-2">
-            <span className="text-sm font-semibold">{t("chat.sessions")}</span>
-            <button
-              onClick={newChat}
-              title={t("chat.newChat")}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-
-        {/* Search */}
-        <div className={cn("shrink-0", isMobile ? "px-4 pt-2 pb-3" : "px-2 py-2")}>
-          <div className="relative">
-            <Search className={cn(
-              "absolute top-1/2 -translate-y-1/2 text-muted-foreground/50",
-              isMobile ? "left-3.5 h-4 w-4" : "left-2 h-3 w-3"
-            )} />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t("chat.searchSessions")}
-              className={cn(
-                "border-0 bg-muted/60 focus-visible:ring-1",
-                isMobile ? "h-10 pl-10 text-base rounded-xl" : "h-7 pl-6 text-xs"
-              )}
-            />
-          </div>
-        </div>
-
-        {/* List */}
-        <div className="flex-1 overflow-y-auto min-h-0">
-          <div className={cn(isMobile ? "space-y-0.5 px-2 pb-24" : "space-y-0.5 px-1")}>
-            {filteredSessions.map((s) => {
-              const channel = channelOf(s.key);
-              const isWeb = channel === "web";
-              const parts = s.key.split(":");
-              const rawLabel = isWeb
-                ? (parts[2] ?? s.key)
-                : (parts[parts.length - 1] ?? s.key);
-              const maxLen = isMobile ? 28 : 14;
-              const label = rawLabel.length > maxLen ? rawLabel.slice(0, maxLen) + "…" : rawLabel;
-              const active = s.key === currentSessionKey;
-              const sessionBusy = sessionStates[s.key]?.isWaiting ?? false;
-              return (
-                <div
-                  key={s.key}
-                  className={cn(
-                    "group relative flex cursor-pointer items-center gap-3 rounded-xl transition-colors",
-                    isMobile ? "px-3 py-3" : "px-2 py-1.5",
-                    active
-                      ? "bg-[rgba(162,188,198,0.5)] text-[#2f4b56] dark:bg-[rgba(59,92,105,0.45)] dark:text-[#d7e4e9]"
-                      : "hover:bg-muted/60"
-                  )}
-                  onClick={() => switchSession(s.key)}
+        <div className="flex min-h-0 flex-1 flex-col">
+          <section
+            className="flex min-h-0 flex-col"
+            style={{ flex: hostPanelCollapsed ? "1 1 auto" : "1 1 50%" }}
+          >
+            {/* Header row — desktop only; mobile title is hidden, FAB used instead */}
+            {!isMobile && (
+              <div className="flex shrink-0 items-center justify-between px-3 py-2">
+                <span className="text-sm font-semibold">{t("chat.sessions")}</span>
+                <button
+                  onClick={newChat}
+                  title={t("chat.newChat")}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
-                  {/* Avatar */}
-                  <div className={cn(
-                    "flex shrink-0 items-center justify-center rounded-full leading-none",
-                    isMobile ? "h-11 w-11 text-xl" : "h-6 w-6 text-sm",
-                    active ? "bg-[rgba(162,188,198,0.75)] dark:bg-[rgba(59,92,105,0.7)]" : "bg-muted"
-                  )}>
-                    {CHANNEL_ICONS[channel] ?? "💬"}
-                  </div>
-
-                  {/* Content */}
-                  <div className="min-w-0 flex-1 overflow-hidden">
-                    <div className="flex items-baseline justify-between gap-1">
-                      <span className={cn(
-                        "truncate font-medium leading-snug",
-                        isMobile ? "text-sm" : "text-xs"
-                      )}>
-                        {label}
-                      </span>
-                      <span className={cn(
-                        "shrink-0 text-[10px] leading-snug",
-                        active ? "text-[#3B5C69] dark:text-[#A2BCC6]" : "text-muted-foreground/70"
-                      )}>
-                        {formatDate(s.updated_at)}
-                      </span>
-                    </div>
-                    <p className={cn(
-                      "mt-0.5 truncate leading-snug",
-                      isMobile ? "text-xs" : "text-[10px]",
-                      active ? "text-[#35525D] dark:text-[#D7E4E9]" : "text-muted-foreground"
-                    )}>
-                      {sessionBusy ? (
-                        <span className="inline-flex items-center gap-1">
-                          <span className="flex gap-0.5">
-                            <span className="h-1 w-1 rounded-full bg-primary animate-bounce [animation-delay:0ms]" />
-                            <span className="h-1 w-1 rounded-full bg-primary animate-bounce [animation-delay:150ms]" />
-                            <span className="h-1 w-1 rounded-full bg-primary animate-bounce [animation-delay:300ms]" />
-                          </span>
-                          <span className="text-primary/70">Processing…</span>
-                        </span>
-                      ) : (s.last_message || "—")}
-                    </p>
-                  </div>
-
-                  {/* Delete */}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className={cn(
-                      "shrink-0 transition-opacity",
-                      isMobile
-                        ? cn("h-8 w-8 opacity-0 active:opacity-100", active && "opacity-100 text-[#35525D] hover:bg-[rgba(162,188,198,0.45)] dark:text-[#D7E4E9] dark:hover:bg-[rgba(59,92,105,0.45)]")
-                        : cn("h-5 w-5 opacity-0 group-hover:opacity-100", active && "opacity-100 text-[#35525D] hover:bg-[rgba(162,188,198,0.45)] dark:text-[#D7E4E9] dark:hover:bg-[rgba(59,92,105,0.45)]")
-                    )}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (active) {
-                        const idx = displaySessions.findIndex((x) => x.key === s.key);
-                        const next = displaySessions[idx + 1] ?? displaySessions[idx - 1];
-                        if (next) switchSession(next.key); else newChat();
-                      }
-                      deleteSession.mutate(s.key);
-                    }}
-                  >
-                    <Trash2 className={cn(isMobile ? "h-4 w-4" : "h-3 w-3")} />
-                  </Button>
-                </div>
-              );
-            })}
-
-            {filteredSessions.length === 0 && (
-              <div className={cn(
-                "flex flex-col items-center justify-center text-muted-foreground",
-                isMobile ? "py-16 gap-2" : "py-6 gap-1"
-              )}>
-                <MessageSquare className={cn(isMobile ? "h-10 w-10 opacity-20" : "h-6 w-6 opacity-20")} />
-                <p className={cn(isMobile ? "text-sm" : "text-xs")}>{t("common.noData")}</p>
+                  <Plus className="h-4 w-4" />
+                </button>
               </div>
             )}
-          </div>
+
+            {/* Search */}
+            <div className={cn("shrink-0", isMobile ? "px-4 pt-2 pb-3" : "px-2 py-2")}>
+              <div className="relative">
+                <Search className={cn(
+                  "absolute top-1/2 -translate-y-1/2 text-muted-foreground/50",
+                  isMobile ? "left-3.5 h-4 w-4" : "left-2 h-3 w-3"
+                )} />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={t("chat.searchSessions")}
+                  className={cn(
+                    "border-0 bg-muted/60 focus-visible:ring-1",
+                    isMobile ? "h-10 pl-10 text-base rounded-xl" : "h-7 pl-6 text-xs"
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* List */}
+            <div className="flex-1 overflow-y-auto min-h-0">
+              <div className={cn(isMobile ? "space-y-0.5 px-2 pb-3" : "space-y-0.5 px-1 pb-2")}>
+                {filteredSessions.map((s) => {
+                  const channel = channelOf(s.key);
+                  const isWeb = channel === "web";
+                  const parts = s.key.split(":");
+                  const rawLabel = isWeb
+                    ? (parts[2] ?? s.key)
+                    : (parts[parts.length - 1] ?? s.key);
+                  const maxLen = isMobile ? 28 : 14;
+                  const label = rawLabel.length > maxLen ? rawLabel.slice(0, maxLen) + "…" : rawLabel;
+                  const active = s.key === currentSessionKey;
+                  const sessionBusy = sessionStates[s.key]?.isWaiting ?? false;
+                  return (
+                    <div
+                      key={s.key}
+                      className={cn(
+                        "group relative flex cursor-pointer items-center gap-3 rounded-xl transition-colors",
+                        isMobile ? "px-3 py-3" : "px-2 py-1.5",
+                        active
+                          ? "bg-[rgba(162,188,198,0.5)] text-[#2f4b56] dark:bg-[rgba(59,92,105,0.45)] dark:text-[#d7e4e9]"
+                          : "hover:bg-muted/60"
+                      )}
+                      onClick={() => switchSession(s.key)}
+                    >
+                      {/* Avatar */}
+                      <div className={cn(
+                        "flex shrink-0 items-center justify-center rounded-full leading-none",
+                        isMobile ? "h-11 w-11 text-xl" : "h-6 w-6 text-sm",
+                        active ? "bg-[rgba(162,188,198,0.75)] dark:bg-[rgba(59,92,105,0.7)]" : "bg-muted"
+                      )}>
+                        {CHANNEL_ICONS[channel] ?? "💬"}
+                      </div>
+
+                      {/* Content */}
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <div className="flex items-baseline justify-between gap-1">
+                          <span className={cn(
+                            "truncate font-medium leading-snug",
+                            isMobile ? "text-sm" : "text-xs"
+                          )}>
+                            {label}
+                          </span>
+                          <span className={cn(
+                            "shrink-0 text-[10px] leading-snug",
+                            active ? "text-[#3B5C69] dark:text-[#A2BCC6]" : "text-muted-foreground/70"
+                          )}>
+                            {formatDate(s.updated_at)}
+                          </span>
+                        </div>
+                        <p className={cn(
+                          "mt-0.5 truncate leading-snug",
+                          isMobile ? "text-xs" : "text-[10px]",
+                          active ? "text-[#35525D] dark:text-[#D7E4E9]" : "text-muted-foreground"
+                        )}>
+                          {sessionBusy ? (
+                            <span className="inline-flex items-center gap-1">
+                              <span className="flex gap-0.5">
+                                <span className="h-1 w-1 rounded-full bg-primary animate-bounce [animation-delay:0ms]" />
+                                <span className="h-1 w-1 rounded-full bg-primary animate-bounce [animation-delay:150ms]" />
+                                <span className="h-1 w-1 rounded-full bg-primary animate-bounce [animation-delay:300ms]" />
+                              </span>
+                              <span className="text-primary/70">Processing…</span>
+                            </span>
+                          ) : (s.last_message || "—")}
+                        </p>
+                      </div>
+
+                      {/* Delete */}
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className={cn(
+                          "shrink-0 transition-opacity",
+                          isMobile
+                            ? cn("h-8 w-8 opacity-0 active:opacity-100", active && "opacity-100 text-[#35525D] hover:bg-[rgba(162,188,198,0.45)] dark:text-[#D7E4E9] dark:hover:bg-[rgba(59,92,105,0.45)]")
+                            : cn("h-5 w-5 opacity-0 group-hover:opacity-100", active && "opacity-100 text-[#35525D] hover:bg-[rgba(162,188,198,0.45)] dark:text-[#D7E4E9] dark:hover:bg-[rgba(59,92,105,0.45)]")
+                        )}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (active) {
+                            const idx = displaySessions.findIndex((x) => x.key === s.key);
+                            const next = displaySessions[idx + 1] ?? displaySessions[idx - 1];
+                            if (next) switchSession(next.key); else newChat();
+                          }
+                          deleteSession.mutate(s.key);
+                        }}
+                      >
+                        <Trash2 className={cn(isMobile ? "h-4 w-4" : "h-3 w-3")} />
+                      </Button>
+                    </div>
+                  );
+                })}
+
+                {filteredSessions.length === 0 && (
+                  <div className={cn(
+                    "flex flex-col items-center justify-center text-muted-foreground",
+                    isMobile ? "py-16 gap-2" : "py-6 gap-1"
+                  )}>
+                    <MessageSquare className={cn(isMobile ? "h-10 w-10 opacity-20" : "h-6 w-6 opacity-20")} />
+                    <p className={cn(isMobile ? "text-sm" : "text-xs")}>{t("common.noData")}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section
+            className={cn(
+              "flex min-h-0 flex-col overflow-hidden border-t",
+              isMobile ? "bg-background" : "bg-card"
+            )}
+            style={{ flex: hostPanelCollapsed ? "0 0 auto" : "1 1 50%" }}
+          >
+            <div className={cn(
+              "flex shrink-0 items-center justify-between",
+              isMobile ? "px-4 py-3" : "px-3 py-2"
+            )}>
+              <span className={cn(
+                "font-semibold",
+                isMobile ? "text-sm" : "text-sm"
+              )}>
+                {t("chat.hostList")}
+              </span>
+              <button
+                type="button"
+                onClick={() => setHostPanelCollapsed((prev) => !prev)}
+                title={hostPanelCollapsed ? t("chat.expandHostList") : t("chat.collapseHostList")}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                {hostPanelCollapsed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+            </div>
+
+            {!hostPanelCollapsed && (
+              <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-2">
+                <div className="space-y-2">
+                  {hosts.length === 0 ? (
+                    <div className="rounded-xl border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
+                      {t("common.noData")}
+                    </div>
+                  ) : (
+                    hosts.map((host) => (
+                      <div
+                        key={host.host_name}
+                        className="cursor-pointer rounded-xl border bg-background/70 p-2 shadow-sm transition-all hover:border-primary/40 hover:bg-primary/5 hover:shadow-md active:scale-[0.99]"
+                        onClick={() => handleHostPromptInsert(host.host_name)}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium leading-snug">
+                              {host.host_name}
+                            </div>
+                            <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                              {host.ip}
+                            </div>
+                          </div>
+                          <span
+                            className={cn(
+                              "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                              getHostStatusTone(host.host_status),
+                            )}
+                          >
+                            {host.host_status ?? "unknown"}
+                          </span>
+                        </div>
+
+                        <div className="mt-2 space-y-1.5">
+                          {(host.databases ?? []).map((database, index) => (
+                            <div
+                              key={`${host.host_name}-${database.database_name}-${index}`}
+                              className="cursor-pointer rounded-lg border bg-muted/30 px-2 py-1.5 transition-all hover:border-primary/35 hover:bg-primary/5 hover:shadow-sm active:scale-[0.99]"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleDatabasePromptInsert(
+                                  host.host_name,
+                                  database.sqlcl_saveconnname,
+                                  database.database_name,
+                                  database.database_status
+                                );
+                              }}
+                              role="button"
+                              tabIndex={0}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 text-xs">
+                                  <div className="truncate font-medium leading-snug">
+                                    {database.database_name}
+                                  </div>
+                                  <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                                    {database.database_version || "-"}
+                                  </div>
+                                </div>
+                                <span
+                                  className={cn(
+                                    "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                                    getDatabaseStatusTone(database.database_status),
+                                  )}
+                                >
+                                  {database.database_status ?? "UNKNOWN"}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
         </div>
 
         {/* FAB — mobile only, fixed bottom-right above the bottom tab bar */}

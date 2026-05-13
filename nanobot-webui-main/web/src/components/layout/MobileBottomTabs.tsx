@@ -14,6 +14,8 @@ import {
   Clock,
   FileJson,
   Users,
+  Database,
+  PlugZap,
   X,
 } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
@@ -25,6 +27,8 @@ const ADMIN_ITEMS = [
   { path: "/users", label: "nav.users", icon: Users },
   { path: "/cron", label: "nav.cron", icon: Clock },
   { path: "/system-config", label: "nav.systemConfig", icon: FileJson },
+  { path: "/database-config", label: "nav.databaseConfig", icon: PlugZap },
+  { path: "/knowledge-base", label: "nav.knowledgeBase", icon: Database },
 ];
 
 export function MobileBottomTabs() {

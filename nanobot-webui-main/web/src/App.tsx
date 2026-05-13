@@ -15,6 +15,8 @@ const Chat = lazy(() => import("./pages/Chat"));
 const Channels = lazy(() => import("./pages/Channels"));
 const Tools = lazy(() => import("./pages/Tools"));
 const CronJobs = lazy(() => import("./pages/CronJobs"));
+const KnowledgeBase = lazy(() => import("./pages/KnowledgeBase"));
+const DatabaseConfig = lazy(() => import("./pages/DatabaseConfig"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Users = lazy(() => import("./pages/Users"));
 const SystemConfig = lazy(() => import("./pages/SystemConfig"));
@@ -99,6 +101,22 @@ export default function App() {
           element={
             <AdminRoute>
               <CronJobs />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="database-config"
+          element={
+            <AdminRoute>
+              <DatabaseConfig />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="knowledge-base"
+          element={
+            <AdminRoute>
+              <KnowledgeBase />
             </AdminRoute>
           }
         />

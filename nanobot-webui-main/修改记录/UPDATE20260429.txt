@@ -1,0 +1,180 @@
+修改记录
+UPDATE20260429
+
+日期
+2026-04-29 晚上
+
+说明
+本次修改以参考 nanobot-webui v0.2.9 为主，采用“按点移植、最小改动”的方式修复当前本地 nanobot-webui-main。
+由于当前本地项目已经做了较多个性化改造，因此没有直接整体替换为 v0.2.9，而是只迁移关键修复逻辑，并保留现有定制功能。
+
+一、SubAgent session key 修复
+问题现象
+SubAgent 执行完成后，WebUI 侧边栏可能出现多余 session。
+根因是内部 session key 拼接异常，可能出现类似：
+web:web:1:abc12345
+而 registry 实际期望的是类似：
+web:1
+导致 registry 查找 miss，随后 fallback 创建了假的或多余的 session。
+
+处理方式
+参考 v0.2.9，在 webui/patches/subagent.py 中加入 session key 归一化逻辑。
+新增统一处理函数：
+_resolve_subagent_chat_key(channel, chat_id)
+并在以下补丁函数中改为先归一化后再查 registry：
+1. _run_subagent_patched
+2. _announce_result_patched
+
+效果
+避免 SubAgent 回调过程中因 key 不一致导致的 registry miss。
+减少 WebUI 侧边栏出现额外假 session 的问题。
+
+二、_run_subagent_patched 签名兼容修复
+问题现象
+创建子任务时报错：
+TypeError: apply.<locals>._run_subagent_patched() takes 5 positional arguments but 6 were given
+
+根因
+当前本地运行环境在调用 SubAgent 时已传入 6 个参数，而旧补丁函数仍按 5 个参数定义。
+
+处理方式
+在 webui/patches/subagent.py 中将 _run_subagent_patched 的签名扩展为兼容新版调用。
+新增可选参数：
+status: Any = None
+
+同时补充状态回写：
+1. 成功时写入 done / ok
+2. 异常时写入 error 信息
+
+效果
+子任务创建恢复正常，不再因函数签名不兼容而失败。
+
+三、ws.py 与 web session 路由兼容修复
+问题现象
+当前本地版本的 websocket 结果回传路径与 v0.2.9 演进后的行为存在偏差。
+某些 web 场景下，结果不能稳定回到原会话。
+
+处理方式
+参考 v0.2.9，对以下路径进行了兼容调整：
+1. webui/api/routes/ws.py
+2. webui/__main__.py
+3. web/src/lib/ws.ts
+4. web/src/components/chat/ChatWindow.tsx
+
+主要内容包括：
+1. websocket 结果回传由旧逻辑调整为按 session_key 路由
+2. 增加 cron_result 推送能力
+3. 前端识别并处理 cron_result 消息类型
+4. cron 结果可以推回原 web 会话
+
+效果
+多 Agent / SubAgent / cron 结果回传链路更稳定，前后端联动恢复正常。
+
+四、聊天侧边栏过滤 cron session
+问题现象
+创建定时任务后，聊天侧边栏会越来越乱，看起来像不断生成新的聊天 session。
+
+根因
+当前 /api/sessions 在某些情况下会把 cron:* 类型内部执行历史也返回给聊天侧边栏。
+这些实际上是 cron 执行历史，不应作为普通聊天会话显示。
+
+处理方式
+在 webui/api/routes/sessions.py 中增加过滤逻辑：
+聊天侧边栏排除 cron: 前缀 session。
+
+效果
+cron 历史仍然保留，但不再混入普通聊天侧边栏。
+
+五、cron 执行返回 OutboundMessage 导致报错的修复
+问题现象
+cron 执行时报错：
+Object of type OutboundMessage is not JSON serializable
+
+随后读取消息接口又报：
+MessageInfo.content 校验失败
+原因是 content 实际变成了 OutboundMessage 对象，而不是字符串或列表。
+
+处理方式
+1. 在 webui/__main__.py 中新增响应归一化函数：
+   _normalize_agent_response_content(response)
+2. 在 on_cron_job() 中，将 process_direct() 的返回值统一转换为可序列化文本
+3. 再将该文本用于：
+   - return
+   - publish_outbound
+   - 写回原 session
+   - push_cron_result
+4. 在 webui/api/routes/sessions.py 中增加防御性兜底：
+   若历史消息 content 不是字符串/列表，则尝试提取其 .content，必要时退化为 str(content)
+
+效果
+1. 不再出现 OutboundMessage not JSON serializable
+2. /api/sessions/.../messages 不再因为历史脏数据直接 500
+3. cron 结果可以稳定显示在原会话中
+
+六、Chat Artifact Preview 与 v0.2.9 对齐修复
+v0.2.9 原始修复点
+当开启 “Show tool messages” 时，SubAgentToolBlock 只显示折叠工具卡片，但没有继续渲染 ArtifactPreview，
+导致 write_file 等工具生成的文件预览卡消失。
+
+v0.2.9 修复方式
+将 SubAgentToolBlock 的返回结构改为 Fragment，
+同时渲染：
+1. 折叠工具卡片
+2. 下方的 ArtifactPreview 列表
+
+本地处理方式
+在 web/src/components/chat/MessageBubble.tsx 中对齐了这一修复逻辑。
+即：
+SubAgentToolBlock 在显示工具消息时，也会继续渲染 ArtifactPreview。
+
+七、额外增加的本地保护：阻止 read_file 误触发 ArtifactPreview
+问题现象
+在读取类似：
+E:\nanobot-main\dba1\skills\linux-inventory\SKILL.md
+这样的文件时，聊天窗口会把 read_file 的读取结果也错误识别为 artifact 文件预览。
+
+这不是 v0.2.9 上述修复本身要处理的问题，而是当前本地项目中额外暴露出来的一个误判问题。
+
+处理方式
+在 web/src/components/chat/MessageBubble.tsx 中增加更严格的判断：
+只允许以下写文件类工具触发 ArtifactPreview：
+1. write_file
+2. edit_file
+
+同时在 web/src/components/chat/ChatWindow.tsx 中同步使用同一判断逻辑。
+
+效果
+1. 真正的写文件产物仍然显示预览卡
+2. read_file 不再被错误显示为 ArtifactPreview
+3. 保留了 v0.2.9 对 SubAgentToolBlock 的显示修复
+
+八、本次涉及的主要文件
+后端
+1. webui/patches/subagent.py
+2. webui/api/routes/ws.py
+3. webui/__main__.py
+4. webui/api/routes/sessions.py
+
+前端
+1. web/src/lib/ws.ts
+2. web/src/components/chat/ChatWindow.tsx
+3. web/src/components/chat/MessageBubble.tsx
+
+九、当前结论
+今晚围绕 v0.2.9 的关键修复，已经按最小改动方式移植到当前本地项目中。
+已覆盖的重点包括：
+1. SubAgent session key 错乱
+2. 子任务补丁签名不兼容
+3. websocket/session_key 回传链路
+4. cron 结果回原会话
+5. 聊天侧边栏混入 cron session
+6. OutboundMessage 序列化与消息读取报错
+7. ArtifactPreview 在 Show tool messages 模式下的显示修复
+
+十、备注
+当前本地代码并非完整 v0.2.9 原版，而是“在现有个性化版本基础上，手工对齐 v0.2.9 关键修复”。
+后续若继续升级 nanobot-ai 或 webui 版本，建议再次检查：
+1. subagent.py 的补丁签名
+2. ws.py 的消息路由
+3. cron 回传链路
+4. ArtifactPreview 的判定策略

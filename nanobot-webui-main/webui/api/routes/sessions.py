@@ -14,6 +14,26 @@ from webui.api.models import MessageInfo, SessionInfo
 router = APIRouter()
 
 
+def _is_chat_sidebar_session(key: str) -> bool:
+    """Return True for sessions that should appear in the chat sidebar.
+
+    Cron executions keep their own history under ``cron:*`` and are surfaced
+    by the dedicated ``/api/cron/sessions`` endpoints, so they should not
+    pollute the main chat session list.
+    """
+    return not key.startswith("cron:")
+
+
+def _normalize_message_content(content):
+    """Keep session APIs resilient if a legacy message stored a non-JSON payload."""
+    if content is None or isinstance(content, (str, list)):
+        return content
+    extracted = getattr(content, "content", None)
+    if isinstance(extracted, (str, list)):
+        return extracted
+    return str(content)
+
+
 def _is_own_session(key: str, user: dict) -> bool:
     """Users can only access their own ``web:<user_id>`` sessions.
     Admins can access all sessions.
@@ -31,7 +51,7 @@ async def list_sessions(
     sessions = svc.session_manager.list_sessions()
     visible = [
         s for s in sessions
-        if _is_own_session(s.get("key", ""), current_user)
+        if _is_chat_sidebar_session(s.get("key", "")) and _is_own_session(s.get("key", ""), current_user)
     ]
     return [
         SessionInfo(
@@ -57,7 +77,7 @@ async def get_session_messages(
     return [
         MessageInfo(
             role=m.get("role", "unknown"),
-            content=m.get("content"),
+            content=_normalize_message_content(m.get("content")),
             timestamp=m.get("timestamp"),
             tool_calls=m.get("tool_calls"),
             tool_call_id=m.get("tool_call_id"),

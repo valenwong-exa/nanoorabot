@@ -145,6 +145,9 @@ def webui_start(
     workspace: Optional[str] = typer.Option(
         None, "--workspace", "-w", help="Override workspace directory"
     ),
+    oracle_config: Optional[str] = typer.Option(
+        None, "--oracle-config", help="Path to Oracle DB connection JSON file"
+    ),
     config_path: Optional[str] = typer.Option(
         None, "--config", "-c", help="Path to config file"
     ),
@@ -170,6 +173,7 @@ def webui_start(
             port=port,
             host=host,
             workspace=workspace,
+            oracle_config=oracle_config,
             config_path=config_path,
             log_level=log_level,
             webui_only=webui_only,
@@ -188,6 +192,7 @@ def webui_start(
         web_port=port,
         web_host=host,
         workspace=workspace,
+        oracle_config=oracle_config,
         log_level=log_level,
         webui_only=webui_only,
     ))
@@ -263,6 +268,7 @@ def webui_restart(
     port: int = typer.Option(18780, "--port", "-p", help="WebUI HTTP port (default: 18780)"),
     host: str = typer.Option("0.0.0.0", "--host", help="Bind address"),
     workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help="Override workspace directory"),
+    oracle_config: Optional[str] = typer.Option(None, "--oracle-config", help="Path to Oracle DB connection JSON file"),
     config_path: Optional[str] = typer.Option(None, "--config", "-c", help="Path to config file"),
     log_level: str = typer.Option("DEBUG", "--log-level", "-l", help="Log level"),
 ) -> None:
@@ -278,7 +284,14 @@ def webui_restart(
         webui_stop()
         import time
         time.sleep(0.5)
-    _start_daemon(port=port, host=host, workspace=workspace, config_path=config_path, log_level=log_level)
+    _start_daemon(
+        port=port,
+        host=host,
+        workspace=workspace,
+        oracle_config=oracle_config,
+        config_path=config_path,
+        log_level=log_level,
+    )
 
 
 # ── Override `channels login` with PR #2348 generic behavior ─────────────────
@@ -336,6 +349,7 @@ def _start_daemon(
     port: int,
     host: str,
     workspace: Optional[str],
+    oracle_config: Optional[str],
     config_path: Optional[str],
     log_level: str = "DEBUG",
     webui_only: bool = False,
@@ -360,6 +374,8 @@ def _start_daemon(
     cmd: list[str] = [nanobot_exe, "webui", "start", "--port", str(port), "--host", host]
     if workspace:
         cmd += ["--workspace", workspace]
+    if oracle_config:
+        cmd += ["--oracle-config", oracle_config]
     if config_path:
         cmd += ["--config", config_path]
     if log_level and log_level.upper() != "DEBUG":
@@ -414,6 +430,8 @@ def _make_standalone_parser():
     p.add_argument("--port", type=int, default=18780, help="WebUI port (default: 18780)")
     p.add_argument("--host", default="0.0.0.0", help="Bind address (default: 0.0.0.0)")
     p.add_argument("--workspace", default=None, help="Override workspace directory")
+    p.add_argument("--oracle-config", default=None, dest="oracle_config",
+                   help="Path to Oracle DB connection JSON file")
     p.add_argument("--config", default=None, dest="config_path",
                    help="Path to config file")
     p.add_argument("--log-level", default="DEBUG", dest="log_level",
@@ -435,5 +453,6 @@ async def _run_all_from_args(args) -> None:
         web_port=args.port,
         web_host=args.host,
         workspace=args.workspace,
+        oracle_config=getattr(args, "oracle_config", None),
         log_level=getattr(args, "log_level", "DEBUG"),
     )

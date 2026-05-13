@@ -1,13 +1,25 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 import { Skeleton } from "../components/ui/skeleton";
+import { Switch } from "../components/ui/switch";
 import { cn } from "../lib/utils";
-import { useHostInventory, useRefreshHostInventory } from "../hooks/useHostInventory";
+import {
+  useHostInventory,
+  useHostInventoryRefreshConfig,
+  useRefreshHostInventory,
+  useUpdateHostInventoryRefreshConfig,
+} from "../hooks/useHostInventory";
 import { CheckCircle2, Database, HardDrive, LoaderCircle, RefreshCw, Server, ShieldAlert } from "lucide-react";
+
+const DEFAULT_AUTO_REFRESH_INTERVAL_MINUTES = 1;
+const MIN_AUTO_REFRESH_INTERVAL_MINUTES = 1;
+const MAX_AUTO_REFRESH_INTERVAL_MINUTES = 1440;
 
 function getHostStatusTone(status: string) {
   switch (status) {
@@ -23,7 +35,7 @@ function getHostStatusTone(status: string) {
 }
 
 function getDatabaseStatusTone(status: string) {
-  if (status === "OPEN" || status === "MOUNTED" || status === "STARTED") {
+  if (status === "OPEN" || status === "MOUNTED" || status === "STARTED" || status === "RUNNING") {
     return "bg-emerald-600 text-white hover:bg-emerald-700";
   }
   if (status === "UNKNOWN") {
@@ -32,29 +44,87 @@ function getDatabaseStatusTone(status: string) {
   return "bg-rose-600 text-white hover:bg-rose-700";
 }
 
+function formatDateTime(value?: string | null): string {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date);
+}
+
 export default function ServerHost() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { data, isLoading } = useHostInventory();
+  const refreshConfigQuery = useHostInventoryRefreshConfig();
   const refreshInventory = useRefreshHostInventory();
+  const updateRefreshConfig = useUpdateHostInventoryRefreshConfig();
   const refreshedInventoryPathRef = useRef<string | null>(null);
+  const lastSuccessAtRef = useRef<string | null>(null);
+  const [autoRefreshIntervalDraft, setAutoRefreshIntervalDraft] = useState<string>(
+    String(DEFAULT_AUTO_REFRESH_INTERVAL_MINUTES),
+  );
 
   const hosts = data?.hosts ?? [];
   const runningHosts = hosts.filter((host) => host.host_status === "Running").length;
   const attentionHosts = hosts.filter((host) => host.host_status && host.host_status !== "Running").length;
   const totalDatabases = hosts.reduce((sum, host) => sum + (host.databases?.length ?? 0), 0);
+  const autoRefreshEnabled = refreshConfigQuery.data?.enabled ?? false;
+  const parsedInterval = Number.parseInt(autoRefreshIntervalDraft, 10);
+  const autoRefreshIntervalValue = Number.isFinite(parsedInterval)
+    ? Math.min(
+        MAX_AUTO_REFRESH_INTERVAL_MINUTES,
+        Math.max(MIN_AUTO_REFRESH_INTERVAL_MINUTES, parsedInterval),
+      )
+    : DEFAULT_AUTO_REFRESH_INTERVAL_MINUTES;
+  const autoRefreshConfigBusy = refreshConfigQuery.isLoading || updateRefreshConfig.isPending;
+  const refreshInProgress = refreshInventory.isPending || refreshConfigQuery.data?.isRunning === true;
 
   const handleRefresh = () => {
-    if (refreshInventory.isPending || !data?.exists) {
+    if (refreshInProgress || !data?.exists) {
       return;
     }
     refreshInventory.mutate(undefined, {
       onSuccess: (nextData) => {
         refreshedInventoryPathRef.current = nextData.inventory_path;
         queryClient.setQueryData(["host-inventory"], nextData);
+        void queryClient.invalidateQueries({ queryKey: ["host-inventory", "refresh-config"] });
+      },
+      onSettled: () => {
+        void queryClient.invalidateQueries({ queryKey: ["host-inventory", "refresh-config"] });
       },
     });
   };
+
+  useEffect(() => {
+    const nextInterval = refreshConfigQuery.data?.intervalMinutes;
+    if (typeof nextInterval !== "number") {
+      return;
+    }
+    setAutoRefreshIntervalDraft(String(nextInterval));
+  }, [refreshConfigQuery.data?.intervalMinutes]);
+
+  useEffect(() => {
+    const lastSuccessAt = refreshConfigQuery.data?.lastSuccessAt ?? null;
+    if (!lastSuccessAt) {
+      return;
+    }
+    if (lastSuccessAtRef.current === lastSuccessAt) {
+      return;
+    }
+    lastSuccessAtRef.current = lastSuccessAt;
+    void queryClient.invalidateQueries({ queryKey: ["host-inventory"] });
+  }, [queryClient, refreshConfigQuery.data?.lastSuccessAt]);
 
   useEffect(() => {
     if (isLoading || !data?.exists || !data.inventory_path) {
@@ -70,6 +140,15 @@ export default function ServerHost() {
     refreshedInventoryPathRef.current = data.inventory_path;
     handleRefresh();
   }, [data?.exists, data?.inventory_path, isLoading, queryClient, refreshInventory]);
+
+  const handleUpdateAutoRefreshConfig = async (patch: {
+    enabled?: boolean;
+    intervalMinutes?: number;
+  }) => {
+    const nextConfig = await updateRefreshConfig.mutateAsync(patch);
+    queryClient.setQueryData(["host-inventory", "refresh-config"], nextConfig);
+    setAutoRefreshIntervalDraft(String(nextConfig.intervalMinutes));
+  };
 
   const getHostStatusText = (status?: string) => {
     switch (status) {
@@ -153,7 +232,50 @@ export default function ServerHost() {
             <CardTitle>{t("host.title")}</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">{t("host.subtitle")}</p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <div className="flex items-center gap-3 rounded-lg border px-3 py-2">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={autoRefreshEnabled}
+                    onCheckedChange={(checked) => {
+                      void handleUpdateAutoRefreshConfig({ enabled: checked });
+                    }}
+                    disabled={autoRefreshConfigBusy}
+                />
+                <Label className="text-sm">{t("host.autoRefresh.label")}</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="host-auto-refresh-interval" className="text-sm text-muted-foreground">
+                  {t("host.autoRefresh.intervalLabel")}
+                </Label>
+                <Input
+                  id="host-auto-refresh-interval"
+                  type="number"
+                  min={MIN_AUTO_REFRESH_INTERVAL_MINUTES}
+                  max={MAX_AUTO_REFRESH_INTERVAL_MINUTES}
+                    value={autoRefreshIntervalDraft}
+                    disabled={autoRefreshConfigBusy}
+                  onChange={(event) => {
+                      setAutoRefreshIntervalDraft(event.target.value);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void handleUpdateAutoRefreshConfig({
+                          intervalMinutes: autoRefreshIntervalValue,
+                        });
+                      }
+                  }}
+                  onBlur={() => {
+                      void handleUpdateAutoRefreshConfig({
+                        intervalMinutes: autoRefreshIntervalValue,
+                      });
+                  }}
+                  className="h-8 w-24"
+                />
+                <span className="text-sm text-muted-foreground">{t("host.autoRefresh.intervalUnit")}</span>
+              </div>
+            </div>
             {data?.exists && (
               <Badge variant="secondary" className="max-w-full truncate">
                 {data.workspace}
@@ -164,9 +286,9 @@ export default function ServerHost() {
               variant="outline"
               size="sm"
               onClick={handleRefresh}
-              disabled={!data?.exists || refreshInventory.isPending}
+              disabled={!data?.exists || refreshInProgress}
             >
-              <RefreshCw className={cn("h-4 w-4", refreshInventory.isPending && "animate-spin")} />
+              <RefreshCw className={cn("h-4 w-4", refreshInProgress && "animate-spin")} />
               {t("common.refresh")}
             </Button>
           </div>
@@ -184,7 +306,7 @@ export default function ServerHost() {
             </div>
           ) : (
             <div className="space-y-4">
-              {refreshInventory.isPending && (
+              {refreshInProgress && (
                 <div className="overflow-hidden rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-950/30">
                   <div className="h-1 w-full animate-pulse bg-blue-500" />
                   <div className="flex items-center gap-2 px-4 py-3 text-sm text-blue-700 dark:text-blue-200">
@@ -196,12 +318,27 @@ export default function ServerHost() {
               <div className="rounded-lg border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
                 <span className="font-medium">{t("host.inventorySource")}:</span> {data.inventory_path}
               </div>
+              <div className="rounded-lg border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+                <span className="font-medium">{t("host.autoRefresh.statusLabel")}:</span>{" "}
+                {autoRefreshEnabled
+                  ? t("host.autoRefresh.statusEnabled", { minutes: autoRefreshIntervalValue })
+                  : t("host.autoRefresh.statusDisabled")}
+              </div>
+              <div className="rounded-lg border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+                <span className="font-medium">{t("host.autoRefresh.lastSuccessLabel")}:</span>{" "}
+                {formatDateTime(refreshConfigQuery.data?.lastSuccessAt)}
+              </div>
+              {refreshConfigQuery.data?.lastError ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                  <span className="font-medium">{t("host.autoRefresh.lastErrorLabel")}:</span>{" "}
+                  {refreshConfigQuery.data.lastError}
+                </div>
+              ) : null}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {hosts.map((host) => {
                   const hostStatus = host.host_status ?? "unknown";
                   const hostStatusText = getHostStatusText(hostStatus);
-                  const primaryDb = host.databases?.[0];
-                  const databaseStatus = primaryDb?.database_status ?? "UNKNOWN";
+                  const databases = host.databases ?? [];
                   return (
                     <Card key={host.host_name} className="overflow-hidden border-border/70 bg-card/90">
                       <CardContent className="p-4">
@@ -255,31 +392,74 @@ export default function ServerHost() {
                               </div>
                               <div>
                                 <p className="text-sm font-medium">{t("host.database.title")}</p>
-                                <p className="text-xs text-muted-foreground">{databaseStatus}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {databases.length > 0 ? `${databases.length} database(s)` : t("host.status.unknown")}
+                                </p>
                               </div>
                             </div>
-                            <Badge className={getDatabaseStatusTone(databaseStatus)}>
-                              {databaseStatus}
-                            </Badge>
                           </div>
 
-                          <div className="mt-3 space-y-2 text-xs text-muted-foreground">
-                            <div className="flex items-center justify-between gap-2">
-                              <span>{t("common.status")}</span>
-                              <span className="font-medium text-foreground">{databaseStatus}</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-2">
-                              <span>{t("host.database.primary")}</span>
-                              <span className="font-medium text-foreground">{primaryDb?.database_name ?? "-"}</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-2">
-                              <span>{t("host.database.version")}</span>
-                              <span className="font-medium text-foreground">{primaryDb?.database_version ?? "-"}</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-2">
-                              <span>{t("host.database.deployment")}</span>
-                              <span className="font-medium text-foreground">{t("host.database.singleInstance")}</span>
-                            </div>
+                          <div className="mt-3 space-y-3">
+                            {databases.length > 0 ? (
+                              databases.map((database, index) => {
+                                const databaseStatus = database.database_status ?? "UNKNOWN";
+                                return (
+                                  <div
+                                    key={`${host.host_name}-${database.database_name}-${index}`}
+                                    className="rounded-lg border bg-muted/30 p-3"
+                                  >
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-sm font-medium text-foreground">
+                                          {database.database_name}
+                                        </p>
+                                        <p className="truncate text-xs text-muted-foreground">
+                                          {database.sqlcl_saveconnname || "-"}
+                                        </p>
+                                      </div>
+                                      <Badge className={getDatabaseStatusTone(databaseStatus)}>
+                                        {databaseStatus}
+                                      </Badge>
+                                    </div>
+
+                                    <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span>{t("common.status")}</span>
+                                        <span className="font-medium text-foreground">{databaseStatus}</span>
+                                      </div>
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span>{t("host.database.primary")}</span>
+                                        <span className="font-medium text-foreground">
+                                          {database.database_name ?? "-"}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span>{t("host.database.version")}</span>
+                                        <span className="font-medium text-foreground">
+                                          {database.database_version ?? "-"}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span>SQLcl</span>
+                                        <span className="font-medium text-foreground">
+                                          {database.sqlcl_saveconnname || "-"}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span>{t("host.database.deployment")}</span>
+                                        <span className="font-medium text-foreground">
+                                          {t("host.database.singleInstance")}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div className="rounded-lg border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
+                                {t("common.noData")}
+                              </div>
+                            )}
                           </div>
                         </div>
 

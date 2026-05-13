@@ -1,0 +1,322 @@
+post3迁移评估
+
+日期
+2026-04-29
+
+背景
+当前使用中的 webui 项目为：
+e:\nanobot-main\nanobot-webui-main
+
+当前依赖的 nanobot 版本为：
+nanobot-ai==0.1.5.post1
+
+本地已下载的目标版本为：
+e:\nanobot-main\nanobot-015post3
+版本：
+0.1.5.post3
+
+本次评估目标
+分析是否可以从当前 post1/post2 时代的本地 webui 方案，迁移到底层为 post3 的 nanobot，并继续兼容当前已经做过较多个性化修改的 webui。
+
+
+一、结论
+可以迁移，但不建议直接替换上线。
+
+更准确地说：
+1. 从技术上看，post3 可以作为新的底层能力基础
+2. 但当前 webui 不是“零适配”兼容 post3
+3. 正确做法应当是：先验证 post3 CLI 独立可用，再逐步适配当前 webui 的补丁和前后端消息链路
+
+建议策略：
+先做一套“post3 适配分支/适配副本”，不要直接覆盖当前稳定可用的 webui 目录。
+
+
+二、为什么不能直接切换
+当前 webui 依赖和补丁体系是围绕旧版 nanobot 演进出来的，已经包含多处本地 monkey patch。
+
+当前 webui 中重点补丁包括：
+1. webui/patches/subagent.py
+2. webui/patches/session.py
+3. webui/api/routes/ws.py
+4. webui/__main__.py
+5. webui/api/routes/sessions.py
+
+这些补丁已经针对当前项目做过很多兼容性修复，例如：
+1. SubAgent session key 修复
+2. _run_subagent_patched 签名兼容
+3. websocket 回原 session
+4. cron_result 推送
+5. cron session 过滤
+6. OutboundMessage 非字符串内容兜底
+
+post3 虽然更先进、更稳定，但底层接口和行为继续发生了演进。
+因此不能假定“只要把依赖版本从 post1 改成 post3 就能继续跑”。
+
+
+三、已确认的兼容风险
+1. Session patch 存在明确签名不兼容风险
+当前 webui 的 session patch 中，重写的是旧版签名的：
+Session.get_history(max_messages=500)
+
+但 post3 中 Session.get_history 已经变为更复杂的新签名，支持：
+1. max_messages
+2. max_tokens
+3. include_timestamps
+
+并且 post3 的 AgentLoop 已经按新参数形式调用它。
+这意味着如果直接切换到底层 post3，当前 webui 的 session patch 很可能会直接在运行时报错。
+
+2. SubAgent patch 需要重新校准
+post3 的 SubagentManager 已明显继续演进，内部更多基于 AgentRunner、状态对象、tool_events 等机制。
+当前 webui 的 subagent patch 虽已被修到能用，但本质仍是旧补丁体系的延伸，不适合无检查直接叠加到 post3 上。
+
+3. WebSocket 与前端消息模型落后于 post3 新能力
+post3 新增或强化了这些能力：
+1. ask_user
+2. buttons
+3. tool_events
+4. 每 channel 单独 sendProgress / sendToolHints
+5. 非字符串消息内容的更完整支持
+
+当前 webui 前端和 ws 消息模型主要仍围绕以下类型工作：
+1. session_info
+2. progress
+3. subagent_progress
+4. done
+5. error
+6. revoke_ok
+7. cron_result
+
+因此即使 post3 底层能产出更多结构化能力，当前 webui 也未必能完整接住。
+
+4. 现有本地定制功能需要回归验证
+当前 webui 并不是原版项目，已经有较多本地定制，包括：
+1. 聊天页 UI 改动
+2. 语音输入入口改造
+3. 空会话 logo 定制
+4. ArtifactPreview 本地修复
+5. cron/session/subagent 等运行链路定制
+
+因此迁移时必须以“保留本地功能”为前提做验证。
+
+
+四、为什么仍然值得迁移到 post3
+post3 的整体方向是积极的，尤其适合当前你这种已经深度使用多 Agent、SubAgent、web 会话和长链路交互的场景。
+
+post3 带来的潜在价值包括：
+1. 更成熟的线程/会话隔离能力
+2. ask_user 交互能力
+3. buttons / 选择项能力
+4. tool_events 更完整
+5. 非字符串消息内容支持更稳
+6. 对长会话、推理历史、复杂通道交互更友好
+7. 底层持续在增强稳定性和会话可靠性
+
+从长期维护角度看：
+迁移到 post3 是值得做的，但要按阶段实施。
+
+
+五、推荐迁移策略
+推荐采用“分阶段迁移”，不要一步到位替换。
+
+总体原则：
+1. 先验证 post3 CLI 独立可用
+2. 再引入 webui
+3. 先修后端兼容
+4. 再修前端消息模型
+5. 最后做完整回归测试
+
+
+六、建议迁移步骤
+第 0 步：保留当前稳定版本
+目标
+确保当前可用的 webui 环境不被破坏，方便随时回退。
+
+建议动作
+1. 保留当前 e:\nanobot-main\nanobot-webui-main 不动
+2. 备份当前 .venv 或导出依赖
+3. 记录当前已验证可用的功能点
+
+
+第 1 步：先安装并验证 post3 CLI
+目标
+先确认 post3 本体在你的机器、你的 workspace、你的配置下能独立正常工作。
+
+建议动作
+1. 在单独目录或单独虚拟环境中安装 post3
+2. 优先跑 CLI，不先接 webui
+3. 验证以下基础能力：
+   - 基本对话
+   - read_file / write_file / edit_file
+   - cron
+   - SubAgent
+   - 你的本地常用 skill
+4. 确认 post3 CLI 在你的 Windows 环境下稳定
+
+验收标准
+1. CLI 可以正常启动
+2. 常用工具可调用
+3. SubAgent 可运行
+4. cron 能执行
+5. 不出现明显的 session/消息异常
+
+
+第 2 步：建立 post3 适配版 webui 副本
+目标
+不要直接在当前生产可用 webui 上升级，而是复制出一套迁移试验版本。
+
+建议动作
+1. 复制当前 nanobot-webui-main 为一个新目录
+2. 在新目录中把依赖从 post1 调整为 post3
+3. 单独创建新的虚拟环境
+4. 保持当前稳定版仍可随时启动
+
+建议命名示例
+1. nanobot-webui-main-post3-test
+2. nanobot-webui-main-post3-migrate
+
+
+第 3 步：先修 session 相关兼容
+目标
+优先解决最容易因为签名变化而直接报错的地方。
+
+重点文件
+1. webui/patches/session.py
+2. webui/api/routes/sessions.py
+
+主要任务
+1. 适配 post3 的 Session.get_history 新签名
+2. 校正 SessionManager 删除接口
+3. 检查 list_sessions 返回结构是否仍然与当前 webui 兼容
+4. 确认 last_message 预览逻辑仍成立
+
+验收标准
+1. 会话列表能正常加载
+2. 会话消息能正常打开
+3. 不出现 get_history 参数错误
+
+
+第 4 步：适配 SubAgent patch
+目标
+让当前 webui 的 SubAgent 展示、session key 修复、结果回传逻辑继续适用于 post3。
+
+重点文件
+1. webui/patches/subagent.py
+2. nanobot-015post3/nanobot/agent/subagent.py（作为对照）
+
+主要任务
+1. 对齐 post3 的 _run_subagent 形态
+2. 对齐 _announce_result 行为
+3. 保留现有 session key 归一化修复
+4. 保留 WebUI 的 progress / announce / save_turn 链路
+
+验收标准
+1. 创建子任务正常
+2. SubAgent 结果能回到正确会话
+3. 不再生成多余 session
+
+
+第 5 步：适配 ws.py 与 __main__.py
+目标
+确保 web channel、cron_result、message tool 捕获、会话切换逻辑在 post3 下继续正常。
+
+重点文件
+1. webui/api/routes/ws.py
+2. webui/__main__.py
+
+主要任务
+1. 检查 post3 的 process_direct 返回值行为
+2. 校正 cron 执行结果回传链路
+3. 保持当前 web session 回原会话逻辑
+4. 继续处理非字符串 content 场景
+
+验收标准
+1. websocket 正常聊天
+2. cron 结果能回原会话
+3. 不出现 OutboundMessage 序列化错误
+
+
+第 6 步：前端适配 post3 新消息能力
+目标
+确保当前前端至少不会因为 post3 新消息结构而出错，并尽量接住可用能力。
+
+重点文件
+1. web/src/lib/ws.ts
+2. web/src/components/chat/ChatWindow.tsx
+3. web/src/components/chat/MessageBubble.tsx
+
+主要任务
+1. 先做兼容，不要求一步到位支持全部新特性
+2. 至少保证未知消息类型不会导致前端异常
+3. 评估是否接入：
+   - ask_user
+   - buttons
+   - tool_events
+4. 保持当前 ArtifactPreview、消息显示、SubAgent 卡片逻辑正常
+
+验收标准
+1. 基础聊天正常
+2. 工具消息正常
+3. SubAgent 卡片正常
+4. 不因为新字段导致页面报错
+
+
+第 7 步：做完整回归测试
+目标
+在切换前，把你当前最常用的链路全部走一遍。
+
+建议最少覆盖这些场景
+1. 普通聊天
+2. read_file / write_file / edit_file
+3. 调用 skill
+4. 创建 SubAgent
+5. 定时任务 cron
+6. 旧 session 打开
+7. 新 session 创建
+8. 多 session 切换
+9. ArtifactPreview
+10. 撤回消息
+
+额外建议
+如果未来要使用 ask_user 或按钮交互，也应单独做专项验证。
+
+
+第 8 步：最后再考虑切换主版本
+目标
+仅在迁移版验证通过后，再决定是否替换当前主环境。
+
+建议动作
+1. 保留当前稳定版一段时间
+2. 迁移版连续使用一段时间再切主
+3. 切换前再次备份 sessions 与 runtime 配置
+
+
+七、建议优先级
+如果准备开始做，推荐顺序如下：
+1. 先安装 post3 CLI，确认 CLI 可用
+2. 复制当前 webui，建立 post3 迁移副本
+3. 先修 session patch
+4. 再修 subagent patch
+5. 再修 ws.py / __main__.py
+6. 再做前端消息兼容
+7. 最后跑完整回归
+
+
+八、最终判断
+post3 值得迁移，但必须按阶段推进。
+
+最稳的做法不是：
+直接把当前 webui 改成 post3 然后上线
+
+而是：
+先让 post3 CLI 单独跑通
+再逐步适配 webui
+最后做回归验证后再切换
+
+
+九、下一步建议
+如果准备真正开始迁移，建议下一步直接执行：
+1. 建立 post3 专用虚拟环境
+2. 安装并验证 post3 CLI
+3. 复制 webui 为迁移测试副本
+4. 开始修第一处确定不兼容点：webui/patches/session.py

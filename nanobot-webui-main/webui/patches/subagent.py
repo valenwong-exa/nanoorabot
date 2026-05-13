@@ -45,6 +45,8 @@ _announce_registry: dict[str, Callable[[str], Awaitable[None]]] = {}
 # assistant message) so ws.py can persist them via AgentLoop._save_turn.
 _save_turn_registry: dict[str, Callable[[list], Awaitable[None]]] = {}
 
+_NO_FINAL_RESPONSE_TEXT = "Task completed but no final response was generated."
+
 
 def register_progress(chat_key: str, callback: Callable[..., Awaitable[None]]) -> None:
     """Register a SubAgent tool-hint progress callback for the given chat key."""
@@ -71,6 +73,64 @@ def register_save_turn(chat_key: str, callback: Callable[[list], Awaitable[None]
 
 def unregister_save_turn(chat_key: str) -> None:
     _save_turn_registry.pop(chat_key, None)
+
+
+def _resolve_subagent_chat_key(channel: str, chat_id: str) -> str:
+    """Normalize the registry key used by web-channel subagent callbacks.
+
+    WebSocket sessions may pass the full session key as ``chat_id``
+    (for example ``web:1:abc12345``). The callback registry is indexed by
+    the stable user key (``web:1``), so trim the session suffix when needed.
+    """
+    if channel == "web" and chat_id.startswith("web:") and chat_id.count(":") >= 2:
+        user_id = chat_id.split(":", 2)[1]
+        return f"web:{user_id}"
+    return f"{channel}:{chat_id}"
+
+
+def _normalize_text_content(content: Any) -> str:
+    """Best-effort conversion for provider/message content into display text."""
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts = [_normalize_text_content(item) for item in content]
+        return "\n".join(part for part in parts if part).strip()
+    if isinstance(content, dict):
+        for key in ("text", "content", "value", "output", "result", "message"):
+            text = _normalize_text_content(content.get(key))
+            if text:
+                return text
+        try:
+            return json.dumps(content, ensure_ascii=False)
+        except Exception:
+            return str(content)
+    return str(content).strip()
+
+
+def _extract_response_text(response: Any) -> str:
+    """Extract final text from provider responses that are not plain strings."""
+    if response is None:
+        return ""
+    for attr in ("final_content", "content", "text", "output_text", "result", "message"):
+        if not hasattr(response, attr):
+            continue
+        text = _normalize_text_content(getattr(response, attr))
+        if text:
+            return text
+    return _normalize_text_content(response)
+
+
+def _extract_final_assistant_text(messages: list[dict[str, Any]]) -> str:
+    """Read the latest assistant text from an in-memory transcript."""
+    for message in reversed(messages):
+        if message.get("role") != "assistant":
+            continue
+        text = _normalize_text_content(message.get("content"))
+        if text:
+            return text
+    return ""
 
 
 async def _save_sub_tool_to_session(
@@ -100,13 +160,15 @@ async def _save_sub_tool_to_session(
         final_text = ""
         tools_called: list[str] = []
         for m in messages:
-            if m.get("role") == "assistant" and m.get("content"):
-                final_text = m["content"]
+            if m.get("role") == "assistant":
+                text = _normalize_text_content(m.get("content"))
+                if text:
+                    final_text = text
             if m.get("role") == "tool":
                 tools_called.append(m.get("name", "?"))
 
         summary = f"[SubAgent completed] Tools: {', '.join(tools_called[-6:])}."
-        if final_text:
+        if final_text and final_text != _NO_FINAL_RESPONSE_TEXT:
             snippet = final_text[:200] + ("…" if len(final_text) > 200 else "")
             summary += f"\nResult: {snippet}"
 
@@ -170,7 +232,7 @@ def apply() -> None:
 
     Targets nanobot nightly (≥ 0.1.5) which has:
     - ``_announce_result`` (not ``_announce``)
-    - ``_run_subagent(self, task_id, task, label, origin)``
+    - ``_run_subagent(self, task_id, task, label, origin, status=None)``
     - ``_build_subagent_prompt(self)`` (no args)
     - ``SpawnTool.set_context(channel, chat_id)`` (no session_key)
     """
@@ -188,6 +250,7 @@ def apply() -> None:
         task: str,
         label: str,
         origin: dict[str, str],
+        status: Any = None,
     ) -> None:
         """Augmented _run_subagent: progress tracking + WebUI progress push per tool call."""
         import asyncio
@@ -201,7 +264,7 @@ def apply() -> None:
 
         channel = origin.get("channel", "")
         chat_id = str(origin.get("chat_id", ""))
-        chat_key = f"{channel}:{chat_id}"
+        chat_key = _resolve_subagent_chat_key(channel, chat_id)
         # For cron sessions, the session_key (e.g. "cron:abc123") differs from
         # chat_key ("cli:direct").  Use origin["session_key"] when available so
         # sub-agent messages are persisted under the correct session.
@@ -310,14 +373,20 @@ def apply() -> None:
                             except Exception:
                                 pass
                 else:
-                    final_result = response.content
+                    final_result = _extract_response_text(response)
                     break
 
-            if final_result is None:
-                final_result = "Task completed but no final response was generated."
+            if not final_result:
+                final_result = _extract_final_assistant_text(messages)
 
-            # Append the final assistant message so _save_turn captures it.
-            messages.append({"role": "assistant", "content": final_result})
+            has_meaningful_final = bool(final_result)
+            if not has_meaningful_final:
+                final_result = _NO_FINAL_RESPONSE_TEXT
+
+            # Only persist a terminal assistant message when it contains
+            # meaningful text; otherwise the placeholder would show up as noise.
+            if has_meaningful_final:
+                messages.append({"role": "assistant", "content": final_result})
 
             logger.info("Subagent [{}] completed successfully", task_id)
 
@@ -325,9 +394,13 @@ def apply() -> None:
             interaction_log = _extract_interaction_log(messages)
 
             # Build enriched result that includes interaction log
-            enriched_result = final_result or ""
+            enriched_result = final_result if has_meaningful_final else ""
             if interaction_log:
-                enriched_result = f"{interaction_log}\n\n---\n\n**最终输出：**\n{enriched_result}"
+                enriched_result = (
+                    f"{interaction_log}\n\n---\n\n**最终输出：**\n{enriched_result}"
+                    if enriched_result
+                    else interaction_log
+                )
 
             # Persist to session (web channel uses registered callback)
             if channel == "web":
@@ -339,11 +412,17 @@ def apply() -> None:
                         pass
 
             # Call _announce_result — our patch below handles web vs non-web routing.
+            if status is not None:
+                status.phase = "done"
+                status.stop_reason = "ok"
             await self._announce_result(task_id, label, task, enriched_result, origin, "ok")
 
         except Exception as e:
             error_msg = f"Error: {e}"
             logger.error("Subagent [{}] failed: {}", task_id, e)
+            if status is not None:
+                status.phase = "error"
+                status.error = str(e)
             try:
                 messages.append({"role": "assistant", "content": error_msg})
                 if channel == "web":
@@ -373,13 +452,17 @@ def apply() -> None:
     ) -> None:
         channel = origin.get("channel", "")
         chat_id = str(origin.get("chat_id", ""))
-        chat_key = f"{channel}:{chat_id}"
+        chat_key = _resolve_subagent_chat_key(channel, chat_id)
 
         if channel == "web":
+            normalized_result = _normalize_text_content(result)
+            if not normalized_result or normalized_result == _NO_FINAL_RESPONSE_TEXT:
+                logger.debug("Subagent [{}] produced no user-facing final result for {}", task_id, chat_key)
+                return
             cb = _announce_registry.get(chat_key)
             if cb:
                 status_icon = "✅" if status == "ok" else "❌"
-                content = f"{status_icon} **[{label}]**\n\n{result}"
+                content = f"{status_icon} **[{label}]**\n\n{normalized_result}"
                 try:
                     await cb(content)
                     logger.debug(

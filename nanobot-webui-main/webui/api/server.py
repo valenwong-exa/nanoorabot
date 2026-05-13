@@ -38,7 +38,9 @@ def create_app(container: ServiceContainer | None = None) -> FastAPI:
         config,
         cron,
         hosts,
+        knowledge_base,
         mcp,
+        oracle_config,
         openai_proxy,
         providers,
         sessions,
@@ -55,6 +57,8 @@ def create_app(container: ServiceContainer | None = None) -> FastAPI:
     app.include_router(channels.router, prefix="/api/channels", tags=["channels"])
     app.include_router(providers.router, prefix="/api/providers", tags=["providers"])
     app.include_router(mcp.router, prefix="/api/mcp", tags=["mcp"])
+    app.include_router(knowledge_base.router, prefix="/api/knowledge-base", tags=["knowledge-base"])
+    app.include_router(oracle_config.router, prefix="/api/oracle-config", tags=["oracle-config"])
     app.include_router(skills.router, prefix="/api/skills", tags=["skills"])
     app.include_router(cron.router, prefix="/api/cron", tags=["cron"])
     app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
@@ -62,6 +66,17 @@ def create_app(container: ServiceContainer | None = None) -> FastAPI:
     app.include_router(workspace.router, prefix="/api/workspace", tags=["workspace"])
     app.include_router(ws.router, tags=["ws"])
     app.include_router(openai_proxy.router)
+
+    if container is not None:
+        app.state.host_inventory_refresh_job = hosts.HostInventoryRefreshJob(container)
+
+        @app.on_event("startup")
+        async def _start_host_inventory_refresh_job() -> None:
+            await app.state.host_inventory_refresh_job.start()
+
+        @app.on_event("shutdown")
+        async def _stop_host_inventory_refresh_job() -> None:
+            await app.state.host_inventory_refresh_job.stop()
 
     # Serve built React frontend (optional — only when `bun run build` has been run)
     # Resolution order:

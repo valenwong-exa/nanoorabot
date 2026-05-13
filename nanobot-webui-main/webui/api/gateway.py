@@ -13,6 +13,7 @@ from nanobot.heartbeat.service import HeartbeatService
 from nanobot.session.manager import SessionManager
 
 from webui.api.channel_ext import ExtendedChannelManager
+from webui.oracle_config import OracleConfigService
 
 
 @dataclass
@@ -26,6 +27,7 @@ class ServiceContainer:
     session_manager: SessionManager
     cron: CronService
     heartbeat: HeartbeatService
+    oracle_config: OracleConfigService
     make_provider: Callable = field(default=lambda cfg: None)
     webui_only: bool = False
 

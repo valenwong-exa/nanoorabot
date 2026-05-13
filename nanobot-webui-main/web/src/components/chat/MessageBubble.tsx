@@ -103,6 +103,11 @@ const ARTIFACT_EXTS = new Set([
   "mp3", "wav", "flac", "aac",
 ]);
 
+const ARTIFACT_WRITER_TOOLS = new Set([
+  "write_file",
+  "edit_file",
+]);
+
 function collectMatches(content: string, pattern: RegExp, seen: Set<string>, results: string[]) {
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(content)) !== null) {
@@ -127,12 +132,29 @@ export function extractArtifactPaths(content: string): string[] {
   return results;
 }
 
+function getArtifactPathsForMessage(message: ChatMessage): string[] {
+  if (!message.content || message.content.startsWith("Error:")) {
+    return [];
+  }
+  if (message.role !== "tool" && message.role !== "sub_tool") {
+    return [];
+  }
+  if (!message.name || !ARTIFACT_WRITER_TOOLS.has(message.name)) {
+    return [];
+  }
+  return extractArtifactPaths(message.content);
+}
+
+export function shouldShowArtifactPreview(message: ChatMessage): boolean {
+  return getArtifactPathsForMessage(message).length > 0;
+}
+
 /** Tool execution result block — clean slate style, collapsible */
 function ToolResultBlock({ message }: { message: ChatMessage }) {
   const isError = message.content.startsWith("Error:");
   const isLong = message.content.length > 300;
   const [open, setOpen] = useState(false);
-  const artifactPaths = isError ? [] : extractArtifactPaths(message.content);
+  const artifactPaths = getArtifactPathsForMessage(message);
 
   return (
     <div className="space-y-1.5">
@@ -190,6 +212,7 @@ function ToolResultBlock({ message }: { message: ChatMessage }) {
  */
 function SubAgentToolBlock({ message }: { message: ChatMessage }) {
   const isError = message.content.startsWith("Error:");
+  const artifactPaths = getArtifactPathsForMessage(message);
 
   // Detect summary-style messages (from _save_sub_tool_to_session or _announce_result)
   const isSummary = /^\[Sub[Aa]gent[\s']/.test(message.content);
@@ -215,53 +238,56 @@ function SubAgentToolBlock({ message }: { message: ChatMessage }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className={cn(
-      "rounded-lg border text-xs overflow-hidden",
-      isError
-        ? "border-red-200/70 bg-red-50/40 dark:border-red-800/40 dark:bg-red-950/15"
-        : "border-indigo-200/60 bg-indigo-50/30 dark:border-indigo-800/40 dark:bg-indigo-950/15"
-    )}>
-      <button
-        onClick={() => isLong && setOpen((v) => !v)}
-        className={cn(
-          "flex w-full items-center gap-2 px-3 py-1.5 text-left rounded-lg transition-colors",
-          isLong && "hover:bg-indigo-100/40 dark:hover:bg-indigo-900/20 cursor-pointer",
-          !isLong && "cursor-default"
+    <>
+      <div className={cn(
+        "rounded-lg border text-xs overflow-hidden",
+        isError
+          ? "border-red-200/70 bg-red-50/40 dark:border-red-800/40 dark:bg-red-950/15"
+          : "border-indigo-200/60 bg-indigo-50/30 dark:border-indigo-800/40 dark:bg-indigo-950/15"
+      )}>
+        <button
+          onClick={() => isLong && setOpen((v) => !v)}
+          className={cn(
+            "flex w-full items-center gap-2 px-3 py-1.5 text-left rounded-lg transition-colors",
+            isLong && "hover:bg-indigo-100/40 dark:hover:bg-indigo-900/20 cursor-pointer",
+            !isLong && "cursor-default"
+          )}
+        >
+          <Bot className="h-3 w-3 shrink-0 text-indigo-400/80" />
+          <span className="font-medium text-indigo-500/80 dark:text-indigo-400/80 truncate max-w-[120px]">
+            ⤹︎ {label}
+          </span>
+          <span className="text-muted-foreground/40">·</span>
+          {isError
+            ? <XCircle className="h-3 w-3 shrink-0 text-red-500" />
+            : <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500" />}
+          <span className="font-mono font-medium text-foreground/70 truncate">
+            {isSummary
+              ? (resultSnippet.length > 60 ? resultSnippet.slice(0, 60) + "…" : resultSnippet || "completed")
+              : (message.name || "tool")}
+          </span>
+          <span className="ml-auto mr-1 shrink-0 text-[10px] text-muted-foreground/40">
+            {new Date(message.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </span>
+          {isLong && (
+            open
+              ? <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/50" />
+              : <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/50" />
+          )}
+        </button>
+        {(open || !isLong) && displayContent.length > 60 && (
+          <div className="border-t border-indigo-200/40 dark:border-indigo-800/30 px-3 py-2">
+            <pre className={cn(
+              "max-h-48 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed",
+              isError ? "text-red-700/80 dark:text-red-300/70" : "text-muted-foreground/80"
+            )}>
+              {displayContent}
+            </pre>
+          </div>
         )}
-      >
-        <Bot className="h-3 w-3 shrink-0 text-indigo-400/80" />
-        <span className="font-medium text-indigo-500/80 dark:text-indigo-400/80 truncate max-w-[120px]">
-          ⤹︎ {label}
-        </span>
-        <span className="text-muted-foreground/40">·</span>
-        {isError
-          ? <XCircle className="h-3 w-3 shrink-0 text-red-500" />
-          : <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500" />}
-        <span className="font-mono font-medium text-foreground/70 truncate">
-          {isSummary
-            ? (resultSnippet.length > 60 ? resultSnippet.slice(0, 60) + "…" : resultSnippet || "completed")
-            : (message.name || "tool")}
-        </span>
-        <span className="ml-auto mr-1 shrink-0 text-[10px] text-muted-foreground/40">
-          {new Date(message.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-        </span>
-        {isLong && (
-          open
-            ? <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/50" />
-            : <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/50" />
-        )}
-      </button>
-      {(open || !isLong) && displayContent.length > 60 && (
-        <div className="border-t border-indigo-200/40 dark:border-indigo-800/30 px-3 py-2">
-          <pre className={cn(
-            "max-h-48 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed",
-            isError ? "text-red-700/80 dark:text-red-300/70" : "text-muted-foreground/80"
-          )}>
-            {displayContent}
-          </pre>
-        </div>
-      )}
-    </div>
+      </div>
+      {!isError && artifactPaths.map((path) => <ArtifactPreview key={path} filePath={path} />)}
+    </>
   );
 }
 
@@ -307,9 +333,11 @@ function ToolMessageWrapper({ children }: { children: React.ReactNode }) {
 
 export function MessageBubble({ message, onRevoke, artifactOnly }: MessageBubbleProps) {
   const user = useAuthStore((s) => s.user);
+  const userMediaPaths = message.role === "user" ? (message.mediaPaths ?? []) : [];
+  const hasUserMediaPreview = userMediaPaths.length > 0;
 
   // Don't render anything for empty/whitespace messages
-  if (!message.content?.trim() && !message.toolCalls?.length && !message.isStreaming) {
+  if (!message.content?.trim() && !message.toolCalls?.length && !message.isStreaming && !hasUserMediaPreview) {
     return null;
   }
 
@@ -321,7 +349,7 @@ export function MessageBubble({ message, onRevoke, artifactOnly }: MessageBubble
   // SubAgent tool result (persisted from session, role="sub_tool")
   if (message.role === "sub_tool") {
     if (artifactOnly) {
-      const paths = extractArtifactPaths(message.content);
+      const paths = getArtifactPathsForMessage(message);
       if (paths.length === 0) return null;
       return (
         <ToolMessageWrapper>
@@ -337,7 +365,7 @@ export function MessageBubble({ message, onRevoke, artifactOnly }: MessageBubble
   // SubAgent progress — indigo-tinted block with bot icon
   if (message.role === "tool" && message.isSubAgent) {
     if (artifactOnly) {
-      const paths = extractArtifactPaths(message.content);
+      const paths = getArtifactPathsForMessage(message);
       if (paths.length === 0) return null;
       return (
         <ToolMessageWrapper>
@@ -353,7 +381,7 @@ export function MessageBubble({ message, onRevoke, artifactOnly }: MessageBubble
   // Tool result — compact collapsible block (no avatar)
   if (message.role === "tool") {
     if (artifactOnly) {
-      const paths = extractArtifactPaths(message.content);
+      const paths = getArtifactPathsForMessage(message);
       if (paths.length === 0) return null;
       return (
         <ToolMessageWrapper>
@@ -402,9 +430,18 @@ export function MessageBubble({ message, onRevoke, artifactOnly }: MessageBubble
         isUser ? "items-end" : "items-start"
       )}>
         {isUser ? (
-          <div className="rounded-2xl rounded-tr-sm bg-orange-200 px-4 py-2.5 text-sm leading-relaxed text-orange-900 shadow-sm dark:bg-orange-800/50 dark:text-orange-100">
-            <span className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{message.content}</span>
-          </div>
+          <>
+            <div className="rounded-2xl rounded-tr-sm bg-orange-200 px-4 py-2.5 text-sm leading-relaxed text-orange-900 shadow-sm dark:bg-orange-800/50 dark:text-orange-100">
+              <span className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{message.content}</span>
+            </div>
+            {hasUserMediaPreview && (
+              <div className="w-full space-y-1.5">
+                {userMediaPaths.map((path) => (
+                  <ArtifactPreview key={path} filePath={path} defaultExpanded />
+                ))}
+              </div>
+            )}
+          </>
         ) : (
           <div className="w-full min-w-0 space-y-2 [overflow-wrap:anywhere]">
             {parts.map((part, i) =>

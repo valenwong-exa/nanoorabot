@@ -6,6 +6,7 @@ export interface ChatMessage {
   role: "user" | "assistant" | "tool" | "system" | "sub_tool";
   content: string;
   timestamp: string;
+  mediaPaths?: string[];
   isStreaming?: boolean;
   toolCalls?: ToolCallInfo[];
   name?: string; // tool result: the tool's name
@@ -26,11 +27,18 @@ interface SessionState {
   progressText: string;
 }
 
+interface DraftSelection {
+  start: number;
+  end: number;
+}
+
 interface ChatState {
   currentSessionKey: string | null;
   messages: ChatMessage[];
   showToolMessages: boolean;
   mobileShowChat: boolean;
+  draftMessages: Record<string, string>;
+  draftSelections: Record<string, DraftSelection>;
 
   /** Per-session waiting / progress state — keyed by session key. */
   sessionStates: Record<string, SessionState>;
@@ -40,6 +48,9 @@ interface ChatState {
   progressText: string;
 
   setMobileShowChat: (v: boolean) => void;
+  setDraftMessage: (value: string, sessionKey?: string) => void;
+  setDraftSelection: (start: number, end?: number, sessionKey?: string) => void;
+  insertDraftMessage: (value: string, sessionKey?: string) => void;
   setCurrentSession: (key: string | null) => void;
   addMessage: (msg: ChatMessage) => void;
   appendAssistantText: (id: string, text: string) => void;
@@ -64,6 +75,8 @@ export const useChatStore = create<ChatState>()(
       messages: [],
       showToolMessages: false,
       mobileShowChat: false,
+      draftMessages: {},
+      draftSelections: {},
       sessionStates: {},
 
       // Derived from sessionStates[currentSessionKey]
@@ -77,6 +90,60 @@ export const useChatStore = create<ChatState>()(
       },
 
       setMobileShowChat: (v) => set({ mobileShowChat: v }),
+
+      setDraftMessage: (value, sessionKey?) =>
+        set((state) => {
+          const key = sessionKey ?? state.currentSessionKey ?? "";
+          if (!key) {
+            return state;
+          }
+          return {
+            draftMessages: {
+              ...state.draftMessages,
+              [key]: value,
+            },
+          };
+        }),
+
+      setDraftSelection: (start, end, sessionKey?) =>
+        set((state) => {
+          const key = sessionKey ?? state.currentSessionKey ?? "";
+          if (!key) {
+            return state;
+          }
+          return {
+            draftSelections: {
+              ...state.draftSelections,
+              [key]: { start, end: end ?? start },
+            },
+          };
+        }),
+
+      insertDraftMessage: (value, sessionKey?) =>
+        set((state) => {
+          const key = sessionKey ?? state.currentSessionKey ?? "";
+          if (!key) {
+            return state;
+          }
+          const current = state.draftMessages[key] ?? "";
+          const selection = state.draftSelections[key] ?? {
+            start: current.length,
+            end: current.length,
+          };
+          const next =
+            current.slice(0, selection.start) + value + current.slice(selection.end);
+          const cursor = selection.start + value.length;
+          return {
+            draftMessages: {
+              ...state.draftMessages,
+              [key]: next,
+            },
+            draftSelections: {
+              ...state.draftSelections,
+              [key]: { start: cursor, end: cursor },
+            },
+          };
+        }),
 
       setCurrentSession: (key) =>
         set((state) => ({

@@ -25,7 +25,9 @@
       "admin": "Administrateur",
       "user": "Utilisateur"
     },
-    "soul": "Âme"
+    "soul": "Âme",
+    "databaseConfig": "Configuration de base de données",
+    "knowledgeBase": "Base de connaissances"
   },
   "host": {
     "title": "Hote",
@@ -199,7 +201,10 @@
       "openExternal": "Ouvrir dans un nouvel onglet",
       "download": "Télécharger le fichier",
       "unsupported": "Ce type de fichier ne prend pas en charge la prévisualisation intégrée. Utilisez le bouton de téléchargement."
-    }
+    },
+    "hostList": "Liste des hôtes",
+    "expandHostList": "Développer la liste des hôtes",
+    "collapseHostList": "Réduire la liste des hôtes"
   },
   "providers": {
     "title": "Fournisseurs",
@@ -594,5 +599,189 @@
     "editorDesc": "Modifiez le contenu puis enregistrez pour synchroniser les changements avec SOUL.md dans l'espace de travail.",
     "lineCount": "{{count}} lignes",
     "synced": "Synchronisé avec le fichier"
+  },
+  "knowledgeBase": {
+    "title": "Knowledge Base",
+    "subtitle": "Upload PDF/TXT documents into Oracle Vector Search and run title-mode document retrieval.",
+    "badge": "Oracle Vector Search",
+    "engineLabel": "Model Engine",
+    "engines": {
+      "qwen": "Qwen",
+      "bge": "BGE"
+    },
+    "engineBadge": "Current Engine: {{engine}}",
+    "tableBindingTitle": "Bound Tables",
+    "ingestTitle": "Document Ingestion",
+    "ingestDescription": "Calls the vector API through the WebUI proxy to parse, chunk, embed, and store documents.",
+    "apiEndpoint": "API Endpoint",
+    "deviceLabel": "Device",
+    "devices": {
+      "auto": "Auto",
+      "cuda": "CUDA",
+      "cpu": "CPU"
+    },
+    "sourceFileLabel": "Source Tag",
+    "sourceFilePlaceholder": "For example: webui",
+    "uploadLabel": "Upload Documents",
+    "supportedTypes": "Only .pdf and .txt files are supported right now.",
+    "pendingFiles": "Pending Files",
+    "uploadEmpty": "No files are waiting to be uploaded.",
+    "uploadButton": "Start Upload",
+    "searchTitle": "Vector Search",
+    "searchDescription": "Uses the title return mode and only shows document names with reranker scores.",
+    "searchLabel": "Search Prompt",
+    "searchPlaceholder": "For example: how to tuning network performance for data guard",
+    "searchButton": "Search",
+    "topKLabel": "TopK",
+    "scoreLabel": "Score",
+    "documentTypeLabel": "Document Type",
+    "documentTypes": {
+      "all": "All",
+      "pdf": "PDF",
+      "txt": "TXT"
+    },
+    "currentModeTitle": "Return Mode",
+    "currentModeValue": "Fixed to title, returning only the document name and score.",
+    "documentTypeBadge": "Type Filter: {{type}}",
+    "resultCount": "Results: {{count}}",
+    "resultTitle": "Search Results",
+    "resultDescription": "The table below only shows document names and scores for quick relevance review.",
+    "healthTitle": "API Health",
+    "healthHealthy": "The vector API is reachable and ready for uploads and search.",
+    "healthUnavailable": "The vector API is unavailable. Verify that the selected service is still running.",
+    "statusChecking": "Checking",
+    "statusConnected": "API Connected",
+    "statusDisconnected": "API Disconnected",
+    "uploadResultsTitle": "Recent Uploads",
+    "uploadResultsCount": "Keeps the latest {{count}} upload results.",
+    "noResults": "No documents matched the current search.",
+    "searchEmpty": "Run a search to see matching document names and scores here.",
+    "table": {
+      "title": "Document Name",
+      "rerankScore": "Score"
+    },
+    "uploadTable": {
+      "title": "Document Name",
+      "status": "Status",
+      "chunks": "Chunks",
+      "length": "Full text length: {{count}}"
+    },
+    "uploadStatus": {
+      "inserted": "Inserted",
+      "duplicate": "Duplicate"
+    },
+    "documentListTitle": "Document List",
+    "documentListDescription": "Reads documents from the tables bound to the selected engine, with paging, filtering, and deletion.",
+    "documentTotal": "Total Documents: {{count}}",
+    "documentListSearchPlaceholder": "Filter by document name...",
+    "filterButton": "Filter",
+    "pageSizeLabel": "Page Size",
+    "pageSizeOption": "{{count}} / page",
+    "documentsTable": {
+      "title": "Document Name",
+      "type": "Type",
+      "chunks": "Chunks",
+      "createdAt": "Created At",
+      "actions": "Actions"
+    },
+    "documentListEmpty": "No documents match the current filters.",
+    "paginationSummary": "Page {{page}} / {{totalPages}}, total {{total}}",
+    "prevPage": "Previous",
+    "nextPage": "Next",
+    "deleteDocument": "Delete Document",
+    "messages": {
+      "selectFilesFirst": "Select one or more files before uploading.",
+      "invalidFileType": "Only .pdf and .txt files can be uploaded.",
+      "uploadFailed": "Document upload failed.",
+      "uploadSuccess": "Processed {{count}} file(s): {{inserted}} inserted, {{duplicates}} skipped as duplicates.",
+      "uploadPartialFailed": "{{count}} file(s) failed to upload. Check the error details.",
+      "searchPromptRequired": "Enter a search prompt first.",
+      "searchFailed": "Vector search failed.",
+      "searching": "Running vector search...",
+      "loadingDocuments": "Loading document list...",
+      "confirmDelete": "Delete document {{name}}? This removes rows from both the document and chunk tables.",
+      "deleteSuccess": "Document deleted.",
+      "deleteFailed": "Failed to delete document."
+    }
+  },
+  "databaseConfig": {
+    "title": "Configuration de base de données",
+    "subtitle": "Gère les paramètres de connexion et les accès à la base Oracle 26ai.",
+    "badge": "Oracle 26ai",
+    "platform": "Oracle Vector Platform",
+    "heroTitle": "Oracle 26ai database",
+    "heroDescription": "Configure l’hôte, le port, le nom de service et les identifiants de la base depuis une entrée unifiée.",
+    "capabilityTitle": "Capacités cibles",
+    "tags": {
+      "vector": "Base vectorielle",
+      "rag": "RAG",
+      "memory": "Mémoire",
+      "audit": "Audit"
+    },
+    "formTitle": "Paramètres de connexion Oracle 26ai",
+    "formDescription": "Gère les paramètres de connexion essentiels et les informations d’authentification nécessaires à l’accès à la base.",
+    "fields": {
+      "user": "Utilisateur",
+      "password": "Mot de passe",
+      "host": "Adresse IP",
+      "port": "Port",
+      "serviceName": "Service Name"
+    },
+    "placeholders": {
+      "user": "ex. vector_admin",
+      "password": "Saisissez le mot de passe de la base",
+      "host": "ex. 192.168.56.101",
+      "serviceName": "ex. FREEPDB1"
+    },
+    "buttons": {
+      "test": "Tester la connexion",
+      "save": "Enregistrer la configuration"
+    },
+    "previewTitle": "Aperçu de la configuration",
+    "previewDescription": "Vue d’ensemble des informations de connexion actuelles.",
+    "snapshotTitle": "Connection Snapshot",
+    "snapshot": {
+      "user": "User",
+      "host": "Host",
+      "port": "Port",
+      "service": "Service",
+      "dsn": "DSN"
+    },
+    "abilitiesTitle": "Capacités de connexion",
+    "abilities": {
+      "connectionTest": "Test de connexion à la base",
+      "saveConfig": "Enregistrement des paramètres de connexion",
+      "serviceManagement": "Gestion centralisée du nom de service",
+      "credentials": "Maintenance des identifiants",
+      "preview": "Aperçu des informations de connexion"
+    },
+    "serverVersion": "Version du serveur",
+    "runtimeTitle": "Informations d execution",
+    "runtime": {
+      "configPath": "Fichier de configuration",
+      "connectString": "Chaine de connexion",
+      "updatedAt": "Mis a jour le",
+      "notAvailable": "Non disponible"
+    },
+    "messages": {
+      "saveSuccess": "Les parametres de connexion Oracle ont ete enregistres.",
+      "saveFailed": "Echec de l enregistrement des parametres de connexion Oracle.",
+      "testSuccess": "Le test de connexion Oracle a reussi.",
+      "testFailed": "Le test de connexion Oracle a echoue.",
+      "loading": "Chargement de la configuration Oracle...",
+      "notTested": "Le test de connexion n a pas encore ete execute.",
+      "metadataPending": "Lancez un test de connexion pour afficher la version de la base, le jeu de caracteres, le RAC et le mode multitenant."
+    },
+    "metadataTitle": "Details de la base",
+    "metadata": {
+      "serverVersion": "Version de la base",
+      "characterSet": "Jeu de caracteres",
+      "rac": "RAC",
+      "multitenant": "Multilocataire"
+    },
+    "values": {
+      "yes": "Oui",
+      "no": "Non"
+    }
   }
 }

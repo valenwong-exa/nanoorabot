@@ -3,6 +3,7 @@ import api from "../lib/api";
 
 export interface HostDatabase {
   database_name: string;
+  sqlcl_saveconnname?: string;
   database_version: string;
   database_status?: string;
 }
@@ -26,17 +27,49 @@ export interface HostInventoryResponse {
   hosts: HostInventoryItem[];
 }
 
-export function useHostInventory() {
+export interface HostInventoryRefreshConfig {
+  enabled: boolean;
+  intervalMinutes: number;
+  isRunning: boolean;
+  lastRunAt: string | null;
+  lastSuccessAt: string | null;
+  lastError: string | null;
+}
+
+export interface HostInventoryRefreshConfigInput {
+  enabled?: boolean;
+  intervalMinutes?: number;
+}
+
+export function useHostInventory(options?: { refetchInterval?: number | false }) {
   return useQuery<HostInventoryResponse>({
     queryKey: ["host-inventory"],
     queryFn: () => api.get("/hosts/inventory").then((r) => r.data),
     staleTime: 0,
     refetchOnMount: "always",
+    refetchInterval: options?.refetchInterval,
   });
 }
 
 export function useRefreshHostInventory() {
   return useMutation<HostInventoryResponse>({
     mutationFn: () => api.post("/hosts/inventory/refresh").then((r) => r.data),
+  });
+}
+
+export function useHostInventoryRefreshConfig() {
+  return useQuery<HostInventoryRefreshConfig>({
+    queryKey: ["host-inventory", "refresh-config"],
+    queryFn: () => api.get("/hosts/inventory/refresh-config").then((r) => r.data),
+    refetchInterval: (query) => (query.state.data?.isRunning ? 2000 : 30000),
+  });
+}
+
+export function useUpdateHostInventoryRefreshConfig() {
+  return useMutation({
+    mutationFn: async (data: HostInventoryRefreshConfigInput) => {
+      const response = await api.put("/hosts/inventory/refresh-config", data);
+      return response.data as HostInventoryRefreshConfig;
+    },
   });
 }

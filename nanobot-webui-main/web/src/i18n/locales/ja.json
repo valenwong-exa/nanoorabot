@@ -25,7 +25,9 @@
       "admin": "管理者",
       "user": "ユーザー"
     },
-    "soul": "魂"
+    "soul": "魂",
+    "databaseConfig": "データベース設定",
+    "knowledgeBase": "ナレッジベース"
   },
   "host": {
     "title": "ホスト",
@@ -199,7 +201,10 @@
       "openExternal": "新しいタブで開く",
       "download": "ファイルをダウンロード",
       "unsupported": "この種類のファイルはインラインプレビューに対応していません。上のダウンロードボタンを使用してください。"
-    }
+    },
+    "hostList": "ホスト一覧",
+    "expandHostList": "ホスト一覧を展開",
+    "collapseHostList": "ホスト一覧を折りたたむ"
   },
   "providers": {
     "title": "プロバイダー",
@@ -594,5 +599,189 @@
     "editorDesc": "内容を編集して保存すると、ワークスペース内の SOUL.md に同期されます。",
     "lineCount": "{{count}} 行",
     "synced": "ファイルと同期済み"
+  },
+  "knowledgeBase": {
+    "title": "Knowledge Base",
+    "subtitle": "Upload PDF/TXT documents into Oracle Vector Search and run title-mode document retrieval.",
+    "badge": "Oracle Vector Search",
+    "engineLabel": "Model Engine",
+    "engines": {
+      "qwen": "Qwen",
+      "bge": "BGE"
+    },
+    "engineBadge": "Current Engine: {{engine}}",
+    "tableBindingTitle": "Bound Tables",
+    "ingestTitle": "Document Ingestion",
+    "ingestDescription": "Calls the vector API through the WebUI proxy to parse, chunk, embed, and store documents.",
+    "apiEndpoint": "API Endpoint",
+    "deviceLabel": "Device",
+    "devices": {
+      "auto": "Auto",
+      "cuda": "CUDA",
+      "cpu": "CPU"
+    },
+    "sourceFileLabel": "Source Tag",
+    "sourceFilePlaceholder": "For example: webui",
+    "uploadLabel": "Upload Documents",
+    "supportedTypes": "Only .pdf and .txt files are supported right now.",
+    "pendingFiles": "Pending Files",
+    "uploadEmpty": "No files are waiting to be uploaded.",
+    "uploadButton": "Start Upload",
+    "searchTitle": "Vector Search",
+    "searchDescription": "Uses the title return mode and only shows document names with reranker scores.",
+    "searchLabel": "Search Prompt",
+    "searchPlaceholder": "For example: how to tuning network performance for data guard",
+    "searchButton": "Search",
+    "topKLabel": "TopK",
+    "scoreLabel": "Score",
+    "documentTypeLabel": "Document Type",
+    "documentTypes": {
+      "all": "All",
+      "pdf": "PDF",
+      "txt": "TXT"
+    },
+    "currentModeTitle": "Return Mode",
+    "currentModeValue": "Fixed to title, returning only the document name and score.",
+    "documentTypeBadge": "Type Filter: {{type}}",
+    "resultCount": "Results: {{count}}",
+    "resultTitle": "Search Results",
+    "resultDescription": "The table below only shows document names and scores for quick relevance review.",
+    "healthTitle": "API Health",
+    "healthHealthy": "The vector API is reachable and ready for uploads and search.",
+    "healthUnavailable": "The vector API is unavailable. Verify that the selected service is still running.",
+    "statusChecking": "Checking",
+    "statusConnected": "API Connected",
+    "statusDisconnected": "API Disconnected",
+    "uploadResultsTitle": "Recent Uploads",
+    "uploadResultsCount": "Keeps the latest {{count}} upload results.",
+    "noResults": "No documents matched the current search.",
+    "searchEmpty": "Run a search to see matching document names and scores here.",
+    "table": {
+      "title": "Document Name",
+      "rerankScore": "Score"
+    },
+    "uploadTable": {
+      "title": "Document Name",
+      "status": "Status",
+      "chunks": "Chunks",
+      "length": "Full text length: {{count}}"
+    },
+    "uploadStatus": {
+      "inserted": "Inserted",
+      "duplicate": "Duplicate"
+    },
+    "documentListTitle": "Document List",
+    "documentListDescription": "Reads documents from the tables bound to the selected engine, with paging, filtering, and deletion.",
+    "documentTotal": "Total Documents: {{count}}",
+    "documentListSearchPlaceholder": "Filter by document name...",
+    "filterButton": "Filter",
+    "pageSizeLabel": "Page Size",
+    "pageSizeOption": "{{count}} / page",
+    "documentsTable": {
+      "title": "Document Name",
+      "type": "Type",
+      "chunks": "Chunks",
+      "createdAt": "Created At",
+      "actions": "Actions"
+    },
+    "documentListEmpty": "No documents match the current filters.",
+    "paginationSummary": "Page {{page}} / {{totalPages}}, total {{total}}",
+    "prevPage": "Previous",
+    "nextPage": "Next",
+    "deleteDocument": "Delete Document",
+    "messages": {
+      "selectFilesFirst": "Select one or more files before uploading.",
+      "invalidFileType": "Only .pdf and .txt files can be uploaded.",
+      "uploadFailed": "Document upload failed.",
+      "uploadSuccess": "Processed {{count}} file(s): {{inserted}} inserted, {{duplicates}} skipped as duplicates.",
+      "uploadPartialFailed": "{{count}} file(s) failed to upload. Check the error details.",
+      "searchPromptRequired": "Enter a search prompt first.",
+      "searchFailed": "Vector search failed.",
+      "searching": "Running vector search...",
+      "loadingDocuments": "Loading document list...",
+      "confirmDelete": "Delete document {{name}}? This removes rows from both the document and chunk tables.",
+      "deleteSuccess": "Document deleted.",
+      "deleteFailed": "Failed to delete document."
+    }
+  },
+  "databaseConfig": {
+    "title": "データベース設定",
+    "subtitle": "Oracle 26ai データベースの接続パラメータとアクセス設定を管理します。",
+    "badge": "Oracle 26ai",
+    "platform": "Oracle Vector Platform",
+    "heroTitle": "Oracle 26ai database",
+    "heroDescription": "データベースのホスト、ポート、サービス名、認証情報をまとめて設定します。",
+    "capabilityTitle": "対象機能",
+    "tags": {
+      "vector": "ベクトル DB",
+      "rag": "RAG",
+      "memory": "メモリ",
+      "audit": "監査"
+    },
+    "formTitle": "Oracle 26ai 接続パラメータ",
+    "formDescription": "データベース接続に必要な基本パラメータと認証情報を管理します。",
+    "fields": {
+      "user": "ユーザー名",
+      "password": "パスワード",
+      "host": "IP アドレス",
+      "port": "ポート",
+      "serviceName": "Service Name"
+    },
+    "placeholders": {
+      "user": "例: vector_admin",
+      "password": "データベースのパスワードを入力",
+      "host": "例: 192.168.56.101",
+      "serviceName": "例: FREEPDB1"
+    },
+    "buttons": {
+      "test": "接続テスト",
+      "save": "設定を保存"
+    },
+    "previewTitle": "設定プレビュー",
+    "previewDescription": "現在の接続情報の概要です。",
+    "snapshotTitle": "Connection Snapshot",
+    "snapshot": {
+      "user": "User",
+      "host": "Host",
+      "port": "Port",
+      "service": "Service",
+      "dsn": "DSN"
+    },
+    "abilitiesTitle": "接続機能",
+    "abilities": {
+      "connectionTest": "データベース接続テスト",
+      "saveConfig": "接続パラメータの保存",
+      "serviceManagement": "サービス名の一元管理",
+      "credentials": "認証情報の管理",
+      "preview": "接続情報のプレビュー"
+    },
+    "serverVersion": "サーバーバージョン",
+    "runtimeTitle": "実行情報",
+    "runtime": {
+      "configPath": "設定ファイル",
+      "connectString": "接続文字列",
+      "updatedAt": "更新日時",
+      "notAvailable": "未設定"
+    },
+    "messages": {
+      "saveSuccess": "Oracle 接続設定を保存しました。",
+      "saveFailed": "Oracle 接続設定の保存に失敗しました。",
+      "testSuccess": "Oracle 接続テストに成功しました。",
+      "testFailed": "Oracle 接続テストに失敗しました。",
+      "loading": "Oracle 設定を読み込み中です...",
+      "notTested": "接続テストはまだ実行されていません。",
+      "metadataPending": "接続テストを実行すると、データベースバージョン、文字セット、RAC、マルチテナント情報が表示されます。"
+    },
+    "metadataTitle": "データベース情報",
+    "metadata": {
+      "serverVersion": "データベースバージョン",
+      "characterSet": "文字セット",
+      "rac": "RAC",
+      "multitenant": "マルチテナント"
+    },
+    "values": {
+      "yes": "はい",
+      "no": "いいえ"
+    }
   }
 }

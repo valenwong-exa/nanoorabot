@@ -11,6 +11,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from loguru import logger
 
 router = APIRouter()
+_NO_FINAL_RESPONSE_TEXT = "Task completed but no final response was generated."
 
 # ---------------------------------------------------------------------------
 # Web-channel message capture
@@ -24,7 +25,7 @@ router = APIRouter()
 # _run_agent coroutine collect them after process_direct returns.
 # ---------------------------------------------------------------------------
 
-# user_id → list[asyncio.Queue[str]]: one queue per active WebSocket connection
+# session_key → list[asyncio.Queue[str]]: one queue per active WebSocket connection
 _web_captures: dict[str, list[asyncio.Queue]] = {}
 _message_tool_patched = False
 _MODEL_IMAGE_EXTENSIONS = {
@@ -47,6 +48,28 @@ _MODEL_IMAGE_EXTENSIONS = {
     ".tiff",
     ".jfif",
 }
+
+
+_cron_push: dict[str, list[asyncio.Queue]] = {}
+
+
+def _register_cron_push(target_key: str, q: "asyncio.Queue[dict]") -> None:
+    _cron_push.setdefault(str(target_key), []).append(q)
+
+
+def _unregister_cron_push(target_key: str, q: "asyncio.Queue[dict]") -> None:
+    lst = _cron_push.get(str(target_key), [])
+    if q in lst:
+        lst.remove(q)
+    if not lst:
+        _cron_push.pop(str(target_key), None)
+
+
+async def push_cron_result(target_key: str, payload: dict) -> None:
+    """Push a cron job result to all active WebSocket connections for the target key."""
+    queues = list(_cron_push.get(str(target_key), []))
+    for q in queues:
+        await q.put(payload)
 
 
 def _normalize_media_paths(raw_media: Any, workspace: Path) -> list[str]:
@@ -195,6 +218,34 @@ async def ws_chat(websocket: WebSocket) -> None:
 
     await websocket.send_json({"type": "session_info", "session_key": session_key})
 
+    uid = str(user["id"])
+    cron_q: asyncio.Queue[dict] = asyncio.Queue()
+    cron_targets: set[str] = set()
+
+    def _sync_cron_targets(*targets: str) -> None:
+        desired = {t for t in targets if t}
+        for key in list(cron_targets - desired):
+            _unregister_cron_push(key, cron_q)
+            cron_targets.remove(key)
+        for key in desired - cron_targets:
+            _register_cron_push(key, cron_q)
+            cron_targets.add(key)
+
+    _sync_cron_targets(uid, session_key)
+
+    async def _drain_cron_queue() -> None:
+        try:
+            while True:
+                payload = await cron_q.get()
+                try:
+                    await websocket.send_json(payload)
+                except Exception:
+                    break
+        except asyncio.CancelledError:
+            pass
+
+    cron_drain_task = asyncio.create_task(_drain_cron_queue())
+
     # Per-session task tracking: allows multiple sessions to run concurrently
     # through a single WebSocket connection.
     session_tasks: dict[str, asyncio.Task] = {}
@@ -218,6 +269,7 @@ async def ws_chat(websocket: WebSocket) -> None:
 
             elif msg_type == "new_session":
                 session_key = f"web:{user['id']}:{uuid.uuid4().hex[:8]}"
+                _sync_cron_targets(uid, session_key)
                 await websocket.send_json({"type": "session_info", "session_key": session_key})
 
             elif msg_type == "revoke":
@@ -275,6 +327,7 @@ async def ws_chat(websocket: WebSocket) -> None:
                 if msg_session_key and _is_allowed_session(msg_session_key):
                     if msg_session_key != session_key:
                         session_key = msg_session_key
+                        _sync_cron_targets(uid, session_key)
                         await websocket.send_json({"type": "session_info", "session_key": session_key})
                 if not content.strip() and not media:
                     continue
@@ -307,8 +360,7 @@ async def ws_chat(websocket: WebSocket) -> None:
                     # message() tool replies addressed to channel="web" are
                     # delivered here instead of being discarded by the dispatcher.
                     capture_q: asyncio.Queue[str] = asyncio.Queue()
-                    uid = str(user["id"])
-                    _web_captures.setdefault(uid, []).append(capture_q)
+                    _web_captures.setdefault(sess, []).append(capture_q)
                     # Register on_progress so SubAgent background tasks can push
                     # tool-call hints to this WebSocket connection.
                     # Uses "subagent_progress" type so frontend shows them as
@@ -358,6 +410,8 @@ async def ws_chat(websocket: WebSocket) -> None:
                                 elif role == "assistant":
                                     if not content:
                                         continue
+                                    if content == _NO_FINAL_RESPONSE_TEXT:
+                                        continue
                                     session.messages.append({
                                         "role": "assistant",
                                         "content": content,
@@ -387,7 +441,9 @@ async def ws_chat(websocket: WebSocket) -> None:
                             media=media_paths,
                             session_key=sess,
                             channel="web",
-                            chat_id=user["id"],
+                            # Pass the full session key as chat_id so web-channel
+                            # replies and cron targets can route back to this session.
+                            chat_id=sess,
                             on_progress=_on_progress,
                         )
                         # nightly returns OutboundMessage; extract .content
@@ -418,11 +474,11 @@ async def ws_chat(websocket: WebSocket) -> None:
                         except Exception:
                             pass
                     finally:
-                        lst = _web_captures.get(uid, [])
+                        lst = _web_captures.get(sess, [])
                         if capture_q in lst:
                             lst.remove(capture_q)
                         if not lst:
-                            _web_captures.pop(uid, None)
+                            _web_captures.pop(sess, None)
                         # Clean up finished task from tracking dict
                         session_tasks.pop(sess, None)
 
@@ -439,3 +495,7 @@ async def ws_chat(websocket: WebSocket) -> None:
             await websocket.send_json({"type": "error", "content": str(exc)})
         except Exception:
             pass
+    finally:
+        for key in list(cron_targets):
+            _unregister_cron_push(key, cron_q)
+        cron_drain_task.cancel()

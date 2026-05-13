@@ -25,13 +25,25 @@
     "role": {
       "admin": "管理员",
       "user": "用户"
-    }
+    },
+    "databaseConfig": "数据库配置",
+    "knowledgeBase": "知识库"
   },
   "host": {
     "title": "主机",
     "subtitle": "从当前工作空间的 linux inventory 中读取主机清单，用于展示主机列表 dashboard。",
     "empty": "当前工作空间中没有可展示的主机清单。",
     "inventorySource": "清单来源",
+    "autoRefresh": {
+      "label": "自动轮询刷新",
+      "intervalLabel": "间隔",
+      "intervalUnit": "分钟",
+      "statusLabel": "后台轮询",
+      "statusEnabled": "已开启，每 {{minutes}} 分钟自动扫描一次主机和数据库状态。",
+      "statusDisabled": "未开启自动轮询刷新。",
+      "lastSuccessLabel": "最近一次成功扫描",
+      "lastErrorLabel": "最近错误"
+    },
     "running": "启动中",
     "notShutdown": "未关闭",
     "stats": {
@@ -199,7 +211,10 @@
       "openExternal": "在新标签页打开",
       "download": "下载文件",
       "unsupported": "该文件类型暂不支持内联预览，请使用上方下载按钮获取文件。"
-    }
+    },
+    "hostList": "主机列表",
+    "expandHostList": "展开主机列表",
+    "collapseHostList": "折叠主机列表"
   },
   "providers": {
     "title": "模型提供商",
@@ -594,5 +609,189 @@
   "pwa": {
     "updateAvailable": "发现新版本，点击立即更新",
     "reload": "立即更新"
+  },
+  "knowledgeBase": {
+    "title": "知识库",
+    "subtitle": "上传 PDF/TXT 文档到 Oracle 向量库，并基于 title 模式执行文档级检索。",
+    "badge": "Oracle Vector Search",
+    "engineLabel": "模型引擎",
+    "engines": {
+      "qwen": "Qwen",
+      "bge": "BGE"
+    },
+    "engineBadge": "当前引擎：{{engine}}",
+    "tableBindingTitle": "当前绑定表",
+    "ingestTitle": "文档入库",
+    "ingestDescription": "通过 WebUI 代理调用向量 API，完成文档解析、切分、embedding 和入库。",
+    "apiEndpoint": "API 地址",
+    "deviceLabel": "推理设备",
+    "devices": {
+      "auto": "自动",
+      "cuda": "CUDA",
+      "cpu": "CPU"
+    },
+    "sourceFileLabel": "来源标记",
+    "sourceFilePlaceholder": "例如 webui",
+    "uploadLabel": "上传文档",
+    "supportedTypes": "当前仅支持 .pdf 和 .txt 文件。",
+    "pendingFiles": "待上传文件",
+    "uploadEmpty": "还没有待处理文件。",
+    "uploadButton": "开始上传",
+    "searchTitle": "Vector Search",
+    "searchDescription": "固定使用 title 返回模式，只展示文档名和 reranker 分数。",
+    "searchLabel": "检索问题",
+    "searchPlaceholder": "例如：how to tuning network performance for data guard",
+    "searchButton": "搜索",
+    "topKLabel": "TopK",
+    "scoreLabel": "Score",
+    "documentTypeLabel": "文档类型",
+    "documentTypes": {
+      "all": "全部",
+      "pdf": "PDF",
+      "txt": "TXT"
+    },
+    "currentModeTitle": "返回模式",
+    "currentModeValue": "固定为 title，仅返回文档名与 score。",
+    "documentTypeBadge": "类型筛选：{{type}}",
+    "resultCount": "命中结果：{{count}}",
+    "resultTitle": "搜索结果",
+    "resultDescription": "下方表格只显示文档名和 score，便于快速确认召回是否准确。",
+    "healthTitle": "API 状态",
+    "healthHealthy": "向量 API 已连接，可以直接上传和搜索。",
+    "healthUnavailable": "无法连接向量 API，请确认目标服务仍在运行。",
+    "statusChecking": "检查中",
+    "statusConnected": "API 已连接",
+    "statusDisconnected": "API 未连接",
+    "uploadResultsTitle": "最近上传",
+    "uploadResultsCount": "最近保留 {{count}} 条上传结果。",
+    "noResults": "当前条件下没有命中任何文档。",
+    "searchEmpty": "输入问题并执行搜索后，这里会显示命中的文档名和分数。",
+    "table": {
+      "title": "文档名",
+      "rerankScore": "Score"
+    },
+    "uploadTable": {
+      "title": "文档名",
+      "status": "状态",
+      "chunks": "Chunks",
+      "length": "全文长度：{{count}}"
+    },
+    "uploadStatus": {
+      "inserted": "已入库",
+      "duplicate": "已存在"
+    },
+    "documentListTitle": "文档列表",
+    "documentListDescription": "从当前引擎绑定的文档表读取清单，支持分页、筛选和删除。",
+    "documentTotal": "总文档数：{{count}}",
+    "documentListSearchPlaceholder": "按文档名过滤列表...",
+    "filterButton": "筛选",
+    "pageSizeLabel": "每页条数",
+    "pageSizeOption": "{{count}} 条/页",
+    "documentsTable": {
+      "title": "文档名",
+      "type": "类型",
+      "chunks": "Chunks",
+      "createdAt": "创建时间",
+      "actions": "操作"
+    },
+    "documentListEmpty": "当前筛选条件下没有文档。",
+    "paginationSummary": "第 {{page}} / {{totalPages}} 页，共 {{total}} 条",
+    "prevPage": "上一页",
+    "nextPage": "下一页",
+    "deleteDocument": "删除文档",
+    "messages": {
+      "selectFilesFirst": "请先选择要上传的文件。",
+      "invalidFileType": "仅允许上传 .pdf 和 .txt 文件。",
+      "uploadFailed": "文档上传失败。",
+      "uploadSuccess": "已处理 {{count}} 个文件，其中新入库 {{inserted}} 个，重复跳过 {{duplicates}} 个。",
+      "uploadPartialFailed": "还有 {{count}} 个文件上传失败，请查看错误提示。",
+      "searchPromptRequired": "请输入检索问题。",
+      "searchFailed": "向量搜索失败。",
+      "searching": "正在执行向量搜索...",
+      "loadingDocuments": "正在读取文档列表...",
+      "confirmDelete": "确定删除文档 {{name}} 吗？将同时删除文档主表和分片表中的数据。",
+      "deleteSuccess": "文档已删除。",
+      "deleteFailed": "删除文档失败。"
+    }
+  },
+  "databaseConfig": {
+    "title": "数据库配置",
+    "subtitle": "管理 Oracle 26ai 数据库连接参数与访问配置。",
+    "badge": "Oracle 26ai",
+    "platform": "Oracle Vector Platform",
+    "heroTitle": "Oracle 26ai database",
+    "heroDescription": "配置数据库主机、端口、服务名和认证信息，统一管理连接入口。",
+    "capabilityTitle": "目标能力",
+    "tags": {
+      "vector": "向量库",
+      "rag": "RAG",
+      "memory": "记忆",
+      "audit": "审计"
+    },
+    "formTitle": "Oracle 26ai 连接参数",
+    "formDescription": "维护数据库连接所需的基础参数与认证信息。",
+    "fields": {
+      "user": "用户名",
+      "password": "密码",
+      "host": "IP 地址",
+      "port": "端口",
+      "serviceName": "Service Name"
+    },
+    "placeholders": {
+      "user": "例如 vector_admin",
+      "password": "请输入数据库密码",
+      "host": "例如 192.168.56.101",
+      "serviceName": "例如 FREEPDB1"
+    },
+    "buttons": {
+      "test": "测试连接",
+      "save": "保存配置"
+    },
+    "previewTitle": "配置预览",
+    "previewDescription": "当前连接信息概览。",
+    "snapshotTitle": "Connection Snapshot",
+    "snapshot": {
+      "user": "User",
+      "host": "Host",
+      "port": "Port",
+      "service": "Service",
+      "dsn": "DSN"
+    },
+    "abilitiesTitle": "连接能力",
+    "abilities": {
+      "connectionTest": "数据库连接测试",
+      "saveConfig": "连接参数保存",
+      "serviceManagement": "服务名统一管理",
+      "credentials": "访问凭证维护",
+      "preview": "连接信息预览"
+    },
+    "serverVersion": "服务器版本",
+    "runtimeTitle": "运行信息",
+    "runtime": {
+      "configPath": "配置文件",
+      "connectString": "连接串",
+      "updatedAt": "更新时间",
+      "notAvailable": "未提供"
+    },
+    "messages": {
+      "saveSuccess": "Oracle 连接配置已保存。",
+      "saveFailed": "保存 Oracle 连接配置失败。",
+      "testSuccess": "Oracle 连接测试成功。",
+      "testFailed": "Oracle 连接测试失败。",
+      "loading": "正在读取 Oracle 配置...",
+      "notTested": "尚未执行连接测试。",
+      "metadataPending": "测试连接后显示数据库版本、字符集、RAC 和多租户信息。"
+    },
+    "metadataTitle": "数据库特征",
+    "metadata": {
+      "serverVersion": "数据库版本",
+      "characterSet": "字符集",
+      "rac": "RAC",
+      "multitenant": "多租户"
+    },
+    "values": {
+      "yes": "是",
+      "no": "否"
+    }
   }
 }
