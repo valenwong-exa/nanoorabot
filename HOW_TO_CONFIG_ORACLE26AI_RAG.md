@@ -1,6 +1,6 @@
-# 安装和启动Oracle 16ai Vector Search API
+# 安装和启动Oracle 26ai Vector Search API
 
-项目：https://github.com/oracle/oracle-16ai-vector-search-api
+项目：[https://github.com/oracle/oracle-16ai-vector-search-api](https://github.com/valenwong-exa/oracle26ai_vector_searchapi)
 
 阅读项目的文档进行安装。
 注意模型目录是空的，需要自己去huggingface下载。
