@@ -7,8 +7,8 @@
 *本项目由资深DBA系统架构师创建和维护，依赖vibe coding 进行开发和维护。欢迎大家一起vide coding。
 *This project is created and maintained by a senior DBA system architect, with development powered by vibe coding. Everyone is welcome to join in and do vibe coding together.
 
-**它面向主机管理、数据库管理和自动化运维场景，强调可扩展、可观测、可持续运行。**
-*It targets host management, database management, and automated operations and maintenance (O&M) scenarios, emphasizing scalability, observability, and sustainable operation.*
+**我们的目标是创建一个便于Oracle数据库管理员，开发人员，数据分析员易于的使用数据库优先Agent。目前的目标是支持oracle数据库，未来扩展为多种数据库（包括中国信创数据库）。它面向主机管理、数据库管理和自动化运维场景，强调可扩展、可观测、可持续运行。本项目由Oracle 客户成功服务部门EAST&WEST China组的同事共同创建和维护。**
+*Our goal is to create a database priority agent that is easy for Oracle database administrators, developers, and data analysts to use. The current goal is to support the Oracle database, and in the future, it will be expanded to support multiple databases (including the China Information Innovation database). This project was jointly created and maintained by colleagues from the EAST&WEST China team of the Oracle Customer Success Department. It targets host management, database management, and automated operations and maintenance (O&M) scenarios, emphasizing scalability, observability, and sustainable operation.*
 
 **特别是针对 Oracle 数据库的运维，本系统提供了深度的自动化管理、故障排查与诊断能力。**
 *Especially for Oracle database O&M, this system provides deep automated management, troubleshooting, and diagnostic capabilities.*
