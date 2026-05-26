@@ -7,7 +7,7 @@
 *本项目由资深DBA系统架构师创建和维护，依赖vibe coding 进行开发和维护。欢迎大家一起vide coding。
 *This project is created and maintained by a senior DBA system architect, with development powered by vibe coding. Everyone is welcome to join in and do vibe coding together.
 
-**我们的目标是创建一个便于Oracle数据库管理员，开发人员，数据分析员易于的使用数据库优先Agent。目前的目标是支持oracle数据库，未来扩展为多种数据库（包括中国信创数据库）。它面向主机管理、数据库管理和自动化运维场景，强调可扩展、可观测、可持续运行。本项目由Oracle 客户成功服务部门EAST&WEST China组的同事共同创建和维护。**
+**我们的目标是创建一个便于Oracle数据库管理员，开发人员，数据分析员易于的使用数据库优先Agent。目前的目标是支持oracle数据库，未来扩展为多种数据库（包括中国信创数据库）。它面向主机管理、数据库管理和自动化运维场景，强调可扩展、可观测、可持续运行。 **
 *Our goal is to create a database priority agent that is easy for Oracle database administrators, developers, and data analysts to use. The current goal is to support the Oracle database, and in the future, it will be expanded to support multiple databases (including the China Information Innovation database). This project was jointly created and maintained by colleagues from the EAST&WEST China team of the Oracle Customer Success Department. It targets host management, database management, and automated operations and maintenance (O&M) scenarios, emphasizing scalability, observability, and sustainable operation.*
 
 **特别是针对 Oracle 数据库的运维，本系统提供了深度的自动化管理、故障排查与诊断能力。**
@@ -20,7 +20,9 @@
 *The system specifically introduces Oracle MCP Server to access Oracle database.*
 
 **通过整合 AI、工具 (Tool)、记忆 (Memory) 与 Web UI 的架构，我们形成了一个可落地的 Agent 管理平台，但本项目在开发中，仅仅限于用于DEV或者UAT环境，如果用于生产环境，后果自负，本项目不承担任何责任。。**
-*By integrating the architecture of AI, Tools, Memory, and Web UI, we have formed a practical Agent management platform. This project is currently under development and is only intended for use in the DEV/UAT environment. If it is used in the production environment, the user shall bear all the consequences.This project assumes no responsibility.*
+*By integrating the architecture of AI, Tools, Memory, and Web UI, we have formed a practical Agent management platform. This project is currently under development and is only intended for use in the DEV/UAT environment. If it is used in the production environment, the user shall bear all the consequences.This project assumes no responsibility.Author: Valen Wong
+Oracle employee, working on Oracle Database Platfrom team of China CSS department.
+This is a personal open-source project. It is not an official Oracle product, not sponsored by Oracle, and does not represent Oracle’s views.*
 **目前本项目仅仅测试了KIMI和Deepseek API*
 **Currently we just tested with KIMI and Deepseek API*
 
