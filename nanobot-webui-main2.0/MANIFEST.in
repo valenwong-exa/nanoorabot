@@ -1,0 +1,25 @@
+# 包含项目文件
+include README.md
+include README_zh.md
+include LICENSE
+include pyproject.toml
+
+# 包含 web 静态资源
+recursive-include webui/web/dist *
+
+# 排除开发文件
+exclude .gitignore
+exclude .dockerignore
+exclude Dockerfile
+exclude docker-compose.yml
+exclude Makefile
+recursive-exclude web *
+recursive-exclude docs *
+prune .git
+prune .github
+prune .vscode
+prune node_modules
+prune __pycache__
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude .DS_Store
