@@ -1,5 +1,46 @@
 {
+  "database_inventory": [
+    {
+      "sqlcl_saveconnname": "aidemo",
+      "database_status": "RUNNING",
+      "database_name": "AIDB",
+      "database_version": "23.26.1.0.0",
+      "last_checked_at": "2026-05-26T08:35:12.756190+00:00",
+      "probe_output": "2026-05-26 08:35:11"
+    },
+    {
+      "sqlcl_saveconnname": "19cdb",
+      "database_status": "RUNNING",
+      "database_name": "ORCL",
+      "database_version": "19.31.0.0",
+      "last_checked_at": "2026-05-26T08:35:16.079528+00:00",
+      "probe_output": "2026-05-26 08:35:14"
+    }
+  ],
   "host_inventory": [
+    {
+      "host_name": "MiWiFi-R3P-srv",
+      "aliases": [
+        "23ai",
+        "23db"
+      ],
+      "ip": "192.168.56.118",
+      "ssh_key": "E:\\OpenSSH-Win64\\linux118.key",
+      "default_user": "oracle",
+      "privilege_escalation": "sudo su -",
+      "os_type": "Oracle Linux 8.10",
+      "databases": [
+        {
+          "database_name": "ORCLCDB",
+          "sqlcl_saveconnname": "",
+          "database_version": "23.0.0.0.0",
+          "oracle_home": "/opt/oracle/product/23c/dbhome_1",
+          "pdb": "Y",
+          "database_status": "INVALID"
+        }
+      ],
+      "host_status": "unable login"
+    },
     {
       "host_name": "19cdb",
       "aliases": [
@@ -14,12 +55,12 @@
       "os_type": "Oracle Linux 8",
       "databases": [
         {
-          "database_name": "19cdb",
+          "database_name": "ORCL",
           "sqlcl_saveconnname": "19cdb",
           "database_version": "19.30",
           "oracle_home": "/u01/app/oracle/product/19.0.0/dbhome_1",
           "pdb": "N",
-          "database_status": "OPEN"
+          "database_status": "RUNNING"
         }
       ],
       "host_status": "Running"
@@ -66,10 +107,18 @@
           "database_version": "23.26.1.0.0",
           "oracle_home": "/oracle/app/oracle/product/23.0.0/dbhome_1",
           "pdb": "Y",
+          "database_status": "RUNNING"
+        },
+        {
+          "database_name": "VECTORDB",
+          "sqlcl_saveconnname": "vdb",
+          "database_version": "23.26.1.0.0",
+          "oracle_home": "/oracle/app/oracle/product/23.0.0/dbhome_1",
+          "pdb": "Y",
           "database_status": "INVALID"
         }
       ],
-      "host_status": "invalid"
+      "host_status": "Running"
     }
   ]
 }
