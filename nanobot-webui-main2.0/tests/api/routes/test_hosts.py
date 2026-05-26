@@ -137,10 +137,14 @@ def test_normalise_database_inventory_adds_unknown_status_when_missing() -> None
 
 
 @pytest.mark.asyncio
-async def test_probe_saved_connection_database_uses_sqlcl_batch(
+async def test_probe_saved_connection_database_uses_first_available_probe_command(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(hosts, "_build_sqlcl_probe_command", lambda connection_name: ["cmd", "/c", "sqlcl2db.bat", connection_name])
+    monkeypatch.setattr(
+        hosts,
+        "_build_sqlcl_probe_commands",
+        lambda connection_name: [["cmd", "/c", "sqlcl2db.bat", connection_name]],
+    )
 
     async def fake_run_command_capture(_command: list[str], timeout: float) -> tuple[bool, str, str]:
         assert timeout == hosts.SQLCL_PROBE_TIMEOUT_SECONDS
@@ -160,7 +164,11 @@ async def test_probe_saved_connection_database_uses_sqlcl_batch(
 async def test_probe_saved_connection_database_marks_non_sysdate_output_invalid(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(hosts, "_build_sqlcl_probe_command", lambda connection_name: ["cmd", "/c", "sqlcl2db.bat", connection_name])
+    monkeypatch.setattr(
+        hosts,
+        "_build_sqlcl_probe_commands",
+        lambda connection_name: [["cmd", "/c", "sqlcl2db.bat", connection_name]],
+    )
 
     async def fake_run_command_capture(_command: list[str], timeout: float) -> tuple[bool, str, str]:
         assert timeout == hosts.SQLCL_PROBE_TIMEOUT_SECONDS
@@ -172,6 +180,73 @@ async def test_probe_saved_connection_database_marks_non_sysdate_output_invalid(
         {"database_name": "ORCL", "sqlcl_saveconnname": "19cdb"}
     )
 
+    assert status == hosts.DATABASE_STATUS_INVALID
+    assert output == "连接失败"
+
+
+@pytest.mark.asyncio
+async def test_probe_saved_connection_database_falls_back_to_sh_when_bat_does_not_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        hosts,
+        "_build_sqlcl_probe_commands",
+        lambda connection_name: [
+            ["cmd", "/c", "sqlcl2db.bat", connection_name],
+            ["bash", "sqlcl2db.sh", connection_name],
+        ],
+    )
+
+    calls: list[list[str]] = []
+
+    async def fake_run_command_capture(command: list[str], timeout: float) -> tuple[bool, str, str]:
+        calls.append(command)
+        assert timeout == hosts.SQLCL_PROBE_TIMEOUT_SECONDS
+        if command[0] == "cmd":
+            return False, "", ""
+        return True, "2026-05-22 10:00:54\n", ""
+
+    monkeypatch.setattr(hosts, "_run_command_capture", fake_run_command_capture)
+
+    status, output = await hosts._probe_saved_connection_database(
+        {"database_name": "AIDB", "sqlcl_saveconnname": "aidemo"}
+    )
+
+    assert calls == [
+        ["cmd", "/c", "sqlcl2db.bat", "aidemo"],
+        ["bash", "sqlcl2db.sh", "aidemo"],
+    ]
+    assert status == hosts.DATABASE_STATUS_RUNNING
+    assert output == "2026-05-22 10:00:54"
+
+
+@pytest.mark.asyncio
+async def test_probe_saved_connection_database_does_not_fallback_when_bat_returns_real_error_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        hosts,
+        "_build_sqlcl_probe_commands",
+        lambda connection_name: [
+            ["cmd", "/c", "sqlcl2db.bat", connection_name],
+            ["bash", "sqlcl2db.sh", connection_name],
+        ],
+    )
+
+    calls: list[list[str]] = []
+
+    async def fake_run_command_capture(command: list[str], timeout: float) -> tuple[bool, str, str]:
+        calls.append(command)
+        assert timeout == hosts.SQLCL_PROBE_TIMEOUT_SECONDS
+        return False, "", "连接失败\n"
+
+    monkeypatch.setattr(hosts, "_run_command_capture", fake_run_command_capture)
+
+    status, output = await hosts._probe_saved_connection_database(
+        {"database_name": "ORCL", "sqlcl_saveconnname": "19cdb"}
+    )
+
+    assert calls == [["cmd", "/c", "sqlcl2db.bat", "19cdb"]]
     assert status == hosts.DATABASE_STATUS_INVALID
     assert output == "连接失败"
 

@@ -154,10 +154,10 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def _resolve_sqlcl_probe_script() -> Path | None:
+def _resolve_sqlcl_probe_script(script_name: str) -> Path | None:
     candidates = (
-        _project_root() / "sqlcl2db.bat",
-        _project_root() / "web" / "src" / "pages" / "sqlcl2db.bat",
+        _project_root() / script_name,
+        _project_root() / "web" / "src" / "pages" / script_name,
     )
     for candidate in candidates:
         if candidate.exists():
@@ -165,14 +165,23 @@ def _resolve_sqlcl_probe_script() -> Path | None:
     return None
 
 
-def _build_sqlcl_probe_command(connection_name: str) -> list[str] | None:
-    if not connection_name or not sys.platform.startswith("win"):
-        return None
-    script_path = _resolve_sqlcl_probe_script()
-    if script_path is None:
-        return None
-    comspec = os.environ.get("COMSPEC", "cmd.exe")
-    return [comspec, "/c", str(script_path), connection_name]
+def _build_sqlcl_probe_commands(connection_name: str) -> list[list[str]]:
+    if not connection_name:
+        return []
+
+    commands: list[list[str]] = []
+
+    batch_script = _resolve_sqlcl_probe_script("sqlcl2db.bat")
+    comspec = os.environ.get("COMSPEC") or shutil.which("cmd")
+    if batch_script is not None and comspec:
+        commands.append([comspec, "/c", str(batch_script), connection_name])
+
+    shell_script = _resolve_sqlcl_probe_script("sqlcl2db.sh")
+    shell_exec = shutil.which("bash") or shutil.which("sh")
+    if shell_script is not None and shell_exec:
+        commands.append([shell_exec, str(shell_script), connection_name])
+
+    return commands
 
 
 def _normalise_probe_output(stdout: str, stderr: str) -> str | None:
@@ -288,14 +297,21 @@ async def _probe_saved_connection_database(
     database: dict[str, Any],
 ) -> tuple[str, str | None]:
     connection_name = str(database.get("sqlcl_saveconnname", "")).strip()
-    command = _build_sqlcl_probe_command(connection_name)
-    if command is None:
+    commands = _build_sqlcl_probe_commands(connection_name)
+    if not commands:
         return DATABASE_STATUS_INVALID, None
-    ok, stdout, stderr = await _run_command_capture(command, timeout=SQLCL_PROBE_TIMEOUT_SECONDS)
-    probe_output = _normalise_probe_output(stdout, stderr)
-    if not ok or not _is_successful_sqlcl_probe_output(probe_output):
-        return DATABASE_STATUS_INVALID, probe_output
-    return DATABASE_STATUS_RUNNING, probe_output
+
+    last_probe_output: str | None = None
+    for command in commands:
+        ok, stdout, stderr = await _run_command_capture(command, timeout=SQLCL_PROBE_TIMEOUT_SECONDS)
+        probe_output = _normalise_probe_output(stdout, stderr)
+        if ok and _is_successful_sqlcl_probe_output(probe_output):
+            return DATABASE_STATUS_RUNNING, probe_output
+        if probe_output is not None:
+            return DATABASE_STATUS_INVALID, probe_output
+        last_probe_output = probe_output
+
+    return DATABASE_STATUS_INVALID, last_probe_output
 
 
 def _apply_database_status(host: dict[str, Any], database_statuses: list[str]) -> dict[str, Any]:
