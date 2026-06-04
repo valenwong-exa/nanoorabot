@@ -43,3 +43,6 @@ Thumbs.db
 .env.*
 *.key
 *.pem
+
+.omo/
+github_upcode.txt
