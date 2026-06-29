@@ -64,51 +64,29 @@ https://github.com/valenwong-exa/nanoorabot/blob/main/DBA_BEST_PRACTICE.md
 
 ## 主要的 系统管理员 特性 | Key Features for SYSTEM Admin
 
-### 删除记忆 | Memory Deletion Commands Summary
-* 因为运维机器人可能不需要记忆 Because OPS robot may not needs memory
-
-### 推荐场景 | Recommended Scenarios
-
-- 想让 AI 忘掉这次聊天上下文：`/forget-session`  
-  Want the AI to forget the context of this chat: `/forget-session`
-
-- 想把沉淀下来的长期记忆也一起清空：`/forget-history`  
-  Want to clear accumulated long-term memory as well: `/forget-history`
-
-- 想彻底重置：`/forget-all`  
-  Want a full reset: `/forget-all`
-
-  自然语言也可以工作| Nautal language works as well
-
-- 只忘当前聊天：`forget current memory`  
-- 只忘长期历史：`忘记历史记忆`  
-- 全忘：`忘记所有记忆`  
-
 ## 可管理主机和数据库列表 | Server Host and Database list
 
 <img width="2308" height="892" alt="image" src="https://github.com/user-attachments/assets/7b117288-e4c2-490d-89a1-cef99e613786" />
 Use Server list and database list to generate prompt to guide AI to connect to correct  target server or database
 <img width="2271" height="1260" alt="image" src="https://github.com/user-attachments/assets/92bcdbef-1316-40f8-adce-143093eeb9fa" />
 
+## 打开数据库metadata tree | Open Database metadata tree
+提供一个类似数据库开发工具的界面 Provide an interface similar to a database development tool
+<img width="2312" height="1296" alt="image" src="https://github.com/user-attachments/assets/75dfb49d-f9de-49ef-b8fe-8264e5f6aa5c" />
+可执行Oracle数据库库对象分析，修改，创建，编译 Can perform analysis, modification, creation and compilation of Oracle database library objects
+<img width="1348" height="1185" alt="image" src="https://github.com/user-attachments/assets/565177d1-76c0-4137-b428-53f809524367" />
+
+<img width="326" height="534" alt="image" src="https://github.com/user-attachments/assets/86753da7-0c04-4da8-8c9d-692d8d5011c8" />
+数据库快速检查 Database Quick Check
+<img width="2296" height="1261" alt="image" src="https://github.com/user-attachments/assets/03085ed8-c139-4cdb-bafa-ba208213a5af" />
+
 
 ## 可选集成26ai数据库 | Integrate with Oracle 26ai（Optional）
 <img width="2530" height="859" alt="image" src="https://github.com/user-attachments/assets/98e0dd97-929c-48fd-90d1-fa0bca685083" />
 
 ## 数据库和主机危险命令防御
+<img width="2289" height="1129" alt="image" src="https://github.com/user-attachments/assets/6fe3bae9-bb6a-4401-98fc-49f1e81d6d61" />
 
-## 内置Oracle SkiLL
-
-来自AI Data Flatform 团队整理
-
-感谢整理和提供
-```
-https://github.com/oracle/skills
-https://github.com/krisrice/oracle-db-skills
-```
-
-
-
-## DBA routine work SOP
 
 ## 基于Oracle 26ai的RAG文档维护和向量搜索功能 | Oracle 26ai Vector Search
 Default use QWEN or BGE-M3 model , mutiple langguages support.
