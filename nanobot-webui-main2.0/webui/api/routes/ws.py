@@ -74,6 +74,37 @@ async def push_cron_result(target_key: str, payload: dict) -> None:
         await q.put(payload)
 
 
+def _register_subagent_callbacks(
+    registered_keys: set[str],
+    chat_key: str,
+    on_progress,
+    on_save_turn,
+    on_done,
+) -> None:
+    """Keep WebUI subagent callbacks alive for the whole WebSocket session."""
+    if chat_key in registered_keys:
+        return
+    from webui.patches.subagent import register_announce, register_progress, register_save_turn
+
+    register_progress(chat_key, on_progress)
+    register_save_turn(chat_key, on_save_turn)
+    register_announce(chat_key, on_done)
+    registered_keys.add(chat_key)
+
+
+def _unregister_subagent_callbacks(registered_keys: set[str]) -> None:
+    """Remove all subagent callbacks tied to a WebSocket connection."""
+    if not registered_keys:
+        return
+    from webui.patches.subagent import unregister_announce, unregister_progress, unregister_save_turn
+
+    for chat_key in list(registered_keys):
+        unregister_progress(chat_key)
+        unregister_save_turn(chat_key)
+        unregister_announce(chat_key)
+        registered_keys.discard(chat_key)
+
+
 def _normalize_media_paths(raw_media: Any, workspace: Path) -> list[str]:
     """Accept only existing image files that stay inside the workspace."""
     if not isinstance(raw_media, list):
@@ -223,6 +254,7 @@ async def ws_chat(websocket: WebSocket) -> None:
     uid = str(user["id"])
     cron_q: asyncio.Queue[dict] = asyncio.Queue()
     cron_targets: set[str] = set()
+    registered_subagent_keys: set[str] = set()
 
     def _sync_cron_targets(*targets: str) -> None:
         desired = {t for t in targets if t}
@@ -363,18 +395,6 @@ async def ws_chat(websocket: WebSocket) -> None:
                     # delivered here instead of being discarded by the dispatcher.
                     capture_q: asyncio.Queue[str] = asyncio.Queue()
                     _web_captures.setdefault(sess, []).append(capture_q)
-                    # Register on_progress so SubAgent background tasks can push
-                    # tool-call hints to this WebSocket connection.
-                    # Uses "subagent_progress" type so frontend shows them as
-                    # persistent tool bubbles (visible even after main agent done).
-                    from webui.patches.subagent import (
-                        register_announce,
-                        register_progress,
-                        register_save_turn,
-                        unregister_announce,
-                        unregister_progress,
-                        unregister_save_turn,
-                    )
                     _subagent_chat_key = f"websocket:{sess}"
 
                     async def _on_subagent_progress(text: str, tool_hint: bool = True) -> None:
@@ -441,9 +461,13 @@ async def ws_chat(websocket: WebSocket) -> None:
                         except Exception:
                             pass
 
-                    register_progress(_subagent_chat_key, _on_subagent_progress)
-                    register_save_turn(_subagent_chat_key, _on_subagent_save_turn)
-                    register_announce(_subagent_chat_key, _on_subagent_done)
+                    _register_subagent_callbacks(
+                        registered_subagent_keys,
+                        _subagent_chat_key,
+                        _on_subagent_progress,
+                        _on_subagent_save_turn,
+                        _on_subagent_done,
+                    )
                     try:
                         from nanobot.bus.events import InboundMessage
 
@@ -493,9 +517,6 @@ async def ws_chat(websocket: WebSocket) -> None:
                         except Exception:
                             pass
                     finally:
-                        unregister_progress(_subagent_chat_key)
-                        unregister_save_turn(_subagent_chat_key)
-                        unregister_announce(_subagent_chat_key)
                         lst = _web_captures.get(sess, [])
                         if capture_q in lst:
                             lst.remove(capture_q)
@@ -518,6 +539,7 @@ async def ws_chat(websocket: WebSocket) -> None:
         except Exception:
             pass
     finally:
+        _unregister_subagent_callbacks(registered_subagent_keys)
         for key in list(cron_targets):
             _unregister_cron_push(key, cron_q)
         cron_drain_task.cancel()

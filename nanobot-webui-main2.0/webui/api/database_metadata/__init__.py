@@ -1,1 +1,1 @@
-"""Database metadata tree support backed by SQLcl and YAML cache."""
+"""Database metadata tree support backed by SQLcl and JSON cache."""

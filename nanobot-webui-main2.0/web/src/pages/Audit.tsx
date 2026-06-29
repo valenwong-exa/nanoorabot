@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Skeleton } from "../components/ui/skeleton";
 import { useAuditSessions } from "../hooks/useAuditSessions";
-import { CheckCircle2, FileText, Filter, MessagesSquare, ShieldCheck } from "lucide-react";
+import { AlertCircle, CheckCircle2, FileText, Filter, MessagesSquare, RotateCcw, ShieldCheck } from "lucide-react";
 import { cn } from "../lib/utils";
 
 function formatTime(value: string) {
@@ -16,42 +18,69 @@ function formatTime(value: string) {
 
 export default function Audit() {
   const { t } = useTranslation();
-  const { data, isLoading } = useAuditSessions();
+  const { data, isLoading, isError, error, refetch, isFetching } = useAuditSessions();
   const [keyword, setKeyword] = useState("");
+  const [sessionTypeFilter, setSessionTypeFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState("all");
 
   const files = data?.files ?? [];
-  const filteredFiles = useMemo(() => {
+  const sessionTypes = useMemo(
+    () => Array.from(new Set(files.map((file) => file.session_type).filter(Boolean))).sort(),
+    [files]
+  );
+  const roles = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          files.flatMap((file) => file.records.map((record) => record.role).filter(Boolean))
+        )
+      ).sort(),
+    [files]
+  );
+
+  const visibleFiles = useMemo(() => {
     const query = keyword.trim().toLowerCase();
-    if (!query) return files;
     return files
-      .map((file) => ({
-        ...file,
-        records: file.records.filter((record) => {
-          const haystack = [
-            file.file_name,
-            file.session_key,
-            file.session_type,
-            record.role,
-            record.summary,
-            record.timestamp,
-          ]
+      .filter((file) => sessionTypeFilter === "all" || file.session_type === sessionTypeFilter)
+      .map((file) => {
+        const filteredRecords = file.records.filter((record) => {
+          if (roleFilter !== "all" && record.role !== roleFilter) {
+            return false;
+          }
+          if (!query) {
+            return true;
+          }
+          const haystack = [record.role, record.summary, record.timestamp, record.search_text]
             .join(" ")
             .toLowerCase();
           return haystack.includes(query);
-        }),
-      }))
-      .filter((file) => file.records.length > 0);
-  }, [files, keyword]);
+        });
+        const fileMatched =
+          !!query &&
+          [file.file_name, file.session_key, file.session_type, file.created_at, file.updated_at]
+            .join(" ")
+            .toLowerCase()
+            .includes(query);
+        return {
+          ...file,
+          records: fileMatched && roleFilter === "all" ? file.records : filteredRecords,
+          fileMatched,
+        };
+      })
+      .filter((file) => file.records.length > 0 || file.fileMatched);
+  }, [files, keyword, roleFilter, sessionTypeFilter]);
 
   const totalRecords = files.reduce((sum, file) => sum + file.records.length, 0);
+  const visibleRecords = visibleFiles.reduce((sum, file) => sum + file.records.length, 0);
   const webFiles = files.filter((file) => file.session_type === "websocket").length;
   const externalFiles = files.filter((file) => file.session_type !== "websocket").length;
+  const errorMessage = error instanceof Error ? error.message : t("audit.error");
 
   const statCards = [
     {
       label: t("audit.stats.sessionFiles"),
       value: files.length,
-      sub: t("audit.stats.latest20Lines"),
+      sub: t("audit.stats.allLines"),
       icon: FileText,
       iconColor: "text-blue-500",
       iconBg: "bg-blue-50 dark:bg-blue-950/50",
@@ -59,7 +88,7 @@ export default function Audit() {
     {
       label: t("audit.stats.auditRows"),
       value: totalRecords,
-      sub: t("audit.stats.visibleRows"),
+      sub: `${t("audit.stats.visibleRows")}: ${visibleRecords}`,
       icon: MessagesSquare,
       iconColor: "text-violet-500",
       iconBg: "bg-violet-50 dark:bg-violet-950/50",
@@ -137,6 +166,22 @@ export default function Audit() {
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-72 w-full" />
             </div>
+          ) : isError ? (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                  <div className="space-y-1">
+                    <div className="font-medium text-destructive">{t("audit.loadFailed")}</div>
+                    <div className="text-muted-foreground">{errorMessage}</div>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+                  <RotateCcw className={cn("h-4 w-4", isFetching && "animate-spin")} />
+                  {t("audit.retry")}
+                </Button>
+              </div>
+            </div>
           ) : !data?.exists || files.length === 0 ? (
             <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
               {t("audit.empty")}
@@ -158,14 +203,49 @@ export default function Audit() {
                     placeholder={t("audit.filterPlaceholder")}
                   />
                 </div>
+                <div className="w-40">
+                  <Select value={sessionTypeFilter} onValueChange={setSessionTypeFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={t("audit.filters.sessionType")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("audit.filters.allSessionTypes")}</SelectItem>
+                      {sessionTypes.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {value}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-36">
+                  <Select value={roleFilter} onValueChange={setRoleFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={t("audit.filters.role")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("audit.filters.allRoles")}</SelectItem>
+                      {roles.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {value}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
-              {filteredFiles.length === 0 ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>{t("audit.filters.visibleFiles")}: {visibleFiles.length}</span>
+                <span>{t("audit.filters.visibleRecords")}: {visibleRecords}</span>
+              </div>
+
+              {visibleFiles.length === 0 ? (
                 <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
                   {t("audit.noMatch")}
                 </div>
               ) : (
-                filteredFiles.map((file) => (
+                visibleFiles.map((file) => (
                   <Card key={file.file_name} className="overflow-hidden border-border/70">
                     <CardHeader className="space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -179,6 +259,9 @@ export default function Audit() {
                           <Badge variant="secondary">{file.session_type}</Badge>
                           <Badge variant="outline">
                             {t("audit.lineCount")}: {file.line_count}
+                          </Badge>
+                          <Badge variant="outline">
+                            {t("audit.matchCount")}: {file.records.length}
                           </Badge>
                         </div>
                       </div>

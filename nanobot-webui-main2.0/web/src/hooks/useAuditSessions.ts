@@ -6,7 +6,7 @@ export interface AuditRecord {
   role: string;
   timestamp: string;
   summary: string;
-  raw: unknown;
+  search_text: string;
 }
 
 export interface AuditSessionFile {

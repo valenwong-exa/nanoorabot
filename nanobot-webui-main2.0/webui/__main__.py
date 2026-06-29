@@ -50,11 +50,44 @@ def _is_default_workspace(workspace: Path | None) -> bool:
     return current.resolve(strict=False) == default.resolve(strict=False)
 
 
+def _bound_websocket_cron_target(job: object) -> str | None:
+    """Return the WebUI session key that should receive a bound cron result."""
+    payload = getattr(job, "payload", None)
+    if payload is None or getattr(payload, "origin_channel", None) != "websocket":
+        return None
+    session_key = getattr(payload, "session_key", None)
+    if isinstance(session_key, str) and session_key.strip():
+        return session_key
+    origin_chat_id = getattr(payload, "origin_chat_id", None)
+    if isinstance(origin_chat_id, str) and origin_chat_id.strip():
+        return origin_chat_id
+    return None
+
+
+async def _push_bound_websocket_cron_result(job: object, response_text: str | None) -> None:
+    """Push a bound cron result to the active WebUI session when applicable."""
+    target_session = _bound_websocket_cron_target(job)
+    if not target_session or not response_text:
+        return
+    from webui.api.routes.ws import push_cron_result
+
+    await push_cron_result(target_session, {
+        "type": "cron_result",
+        "job_id": getattr(job, "id", ""),
+        "job_name": getattr(job, "name", ""),
+        "content": response_text,
+        "session_key": target_session,
+    })
+
+
 async def main(
     web_port: int = 18780,
     web_host: str = "0.0.0.0",
     workspace: str | None = None,
     oracle_config: str | None = None,
+    tool_policy: str | None = None,
+    oracle_audit: bool = False,
+    oracle_memory: bool = False,
     log_level: str = "DEBUG",
     webui_only: bool = False,
 ) -> None:
@@ -63,6 +96,18 @@ async def main(
 
     logger.remove()
     logger.add(_sys.stderr, level=log_level.upper())
+    runtime_dir = Path(__file__).resolve().parent.parent / "runtime"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    oracle_config_file = (
+        Path(oracle_config).expanduser().resolve(strict=False)
+        if oracle_config
+        else runtime_dir / "oracle_config.json"
+    )
+    tool_policy_file = (
+        Path(tool_policy).expanduser().resolve(strict=False)
+        if tool_policy
+        else runtime_dir / "tool_policy.json"
+    )
 
     from nanobot.agent.loop import AgentLoop
     from nanobot.bus.queue import MessageBus
@@ -71,14 +116,18 @@ async def main(
     from nanobot.config.paths import get_cron_dir
     from nanobot.cron.service import CronService
     from nanobot.cron.types import CronJob
-    from nanobot.heartbeat.service import HeartbeatService
     from nanobot.session.manager import SessionManager
     from nanobot.utils.helpers import sync_workspace_templates
 
     from webui.api.channel_ext import ExtendedChannelManager
-    from webui.api.gateway import ServiceContainer, start_api_server
+    from webui.api.gateway import (
+        HeartbeatCompatService,
+        ServiceContainer,
+        start_api_server,
+    )
     from webui.oracle_config import OracleConfigService
     from webui.patches.provider import make_provider_patched
+    from webui.tool_policy import ToolPolicyService
     from webui.utils.channel_compat import (
         is_webui_session_key,
         is_webui_transport_channel,
@@ -127,12 +176,25 @@ async def main(
         provider=provider,
         cron_service=cron,
         session_manager=session_manager,
+        tool_policy_path=tool_policy_file,
+        oracle_config_path=oracle_config_file,
+        oracle_audit_enabled=oracle_audit,
+        oracle_memory_enabled=oracle_memory,
     )
 
     # ------------------------------------------------------------------ cron
     async def on_cron_job(job: CronJob) -> str | None:
+        from nanobot.cron.bound_runner import run_bound_cron_job
+        from nanobot.cron.session_turns import is_bound_cron_job
         from nanobot.agent.tools.cron import CronTool
         from nanobot.agent.tools.message import MessageTool
+
+        if is_bound_cron_job(job):
+            response_text = _normalize_agent_response_content(
+                await run_bound_cron_job(job, agent=agent, cron=cron)
+            )
+            await _push_bound_websocket_cron_result(job, response_text)
+            return response_text
 
         reminder_note = (
             "[Scheduled Task] Timer finished.\n\n"
@@ -250,7 +312,7 @@ async def main(
         await bus.publish_outbound(OutboundMessage(channel=channel, chat_id=chat_id, content=response))
 
     hb_cfg = config.gateway.heartbeat
-    heartbeat = HeartbeatService(
+    heartbeat = HeartbeatCompatService(
         workspace=config.workspace_path,
         provider=provider,
         model=agent.model,
@@ -269,7 +331,10 @@ async def main(
         cron=cron,
         heartbeat=heartbeat,
         oracle_config=OracleConfigService(
-            Path(oracle_config).expanduser().resolve(strict=False) if oracle_config else None
+            oracle_config_file
+        ),
+        tool_policy=ToolPolicyService(
+            tool_policy_file
         ),
         make_provider=make_provider_patched,
         webui_only=webui_only,
@@ -330,6 +395,14 @@ def main_cli() -> None:
     parser.add_argument("--workspace", default=None, help="Override workspace directory")
     parser.add_argument("--oracle-config", default=None, dest="oracle_config",
                         help="Path to Oracle DB connection JSON file")
+    parser.add_argument("--tool-policy", default=None, dest="tool_policy",
+                        help="Path to dangerous tool policy JSON file")
+    parser.add_argument("--oracle-audit", action="store_true", default=False,
+                        dest="oracle_audit",
+                        help="Enable async Oracle persistence for the audit table")
+    parser.add_argument("--oracle-memory", action="store_true", default=False,
+                        dest="oracle_memory",
+                        help="Enable async Oracle persistence for the memory table")
     parser.add_argument("--config", default=None, dest="config_path",
                         help="Path to config file")
     parser.add_argument("--daemon", "-d", action="store_true", default=False,
@@ -350,6 +423,9 @@ def main_cli() -> None:
             host=args.host,
             workspace=args.workspace,
             oracle_config=args.oracle_config,
+            tool_policy=args.tool_policy,
+            oracle_audit=args.oracle_audit,
+            oracle_memory=args.oracle_memory,
             config_path=args.config_path,
         )
         return
@@ -363,6 +439,9 @@ def main_cli() -> None:
         web_host=args.host,
         workspace=args.workspace,
         oracle_config=args.oracle_config,
+        tool_policy=args.tool_policy,
+        oracle_audit=args.oracle_audit,
+        oracle_memory=args.oracle_memory,
         log_level=args.log_level,
         webui_only=args.webui_only,
     ))

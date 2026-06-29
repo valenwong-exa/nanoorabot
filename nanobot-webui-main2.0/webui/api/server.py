@@ -46,6 +46,7 @@ def create_app(container: ServiceContainer | None = None) -> FastAPI:
         providers,
         sessions,
         skills,
+        tool_policy,
         users,
         workspace,
         ws,
@@ -61,6 +62,7 @@ def create_app(container: ServiceContainer | None = None) -> FastAPI:
     app.include_router(mcp.router, prefix="/api/mcp", tags=["mcp"])
     app.include_router(knowledge_base.router, prefix="/api/knowledge-base", tags=["knowledge-base"])
     app.include_router(oracle_config.router, prefix="/api/oracle-config", tags=["oracle-config"])
+    app.include_router(tool_policy.router, prefix="/api/tool-policy", tags=["tool-policy"])
     app.include_router(skills.router, prefix="/api/skills", tags=["skills"])
     app.include_router(cron.router, prefix="/api/cron", tags=["cron"])
     app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])

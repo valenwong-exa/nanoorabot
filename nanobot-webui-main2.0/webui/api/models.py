@@ -139,6 +139,35 @@ class OracleConnectionTestResponse(BaseModel):
     isMultitenant: bool | None = None
 
 
+class ToolPolicyRuleModel(BaseModel):
+    command: str = Field(..., min_length=1)
+    matchType: Literal["literal", "regex"] = "literal"
+    regexFlags: str = ""
+    category: str = Field(..., min_length=1)
+    severity: str = Field(..., min_length=1)
+    mode: str = Field(..., min_length=1)
+    scope: str = Field(..., min_length=1)
+    note: str = ""
+
+
+class ToolPolicyResponse(BaseModel):
+    version: int
+    name: str
+    source: str
+    description: str
+    rules: list[ToolPolicyRuleModel]
+    configPath: str | None = None
+    updatedAt: str | None = None
+
+
+class ToolPolicyRequest(BaseModel):
+    version: int = 1
+    name: str = Field(default="dangerous_tool_policy", min_length=1)
+    source: str = Field(default="webui-defense-page", min_length=1)
+    description: str = ""
+    rules: list[ToolPolicyRuleModel] = Field(default_factory=list)
+
+
 # ---------------------------------------------------------------------------
 # Knowledge Base / Vector Search
 # ---------------------------------------------------------------------------

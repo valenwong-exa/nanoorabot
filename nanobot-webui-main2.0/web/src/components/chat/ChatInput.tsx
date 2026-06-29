@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useLayoutEffect, useEffect } from "react";
+import { useRef, useState, useCallback, useLayoutEffect, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Send, Square, Wifi, WifiOff, Paperclip, X, Loader2, ImageIcon, FileText, Terminal } from "lucide-react";
 import { nanoid } from "nanoid";
@@ -7,7 +7,10 @@ import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { cn } from "../../lib/utils";
 import { uploadFile } from "../../hooks/useConfig";
-import { useChatStore } from "../../stores/chatStore";
+import { useSkills } from "../../hooks/useSkills";
+import { useMCPServers } from "../../hooks/useMCP";
+import { useChatStore, type DraftSnippet } from "../../stores/chatStore";
+import { SkillPickerPanel, type ToolPickerItem } from "./SkillPickerPanel";
 
 const MODEL_IMAGE_EXTENSIONS = new Set([
   ".jpeg",
@@ -31,6 +34,7 @@ const MODEL_IMAGE_EXTENSIONS = new Set([
 ]);
 
 const MODEL_IMAGE_ACCEPT = Array.from(MODEL_IMAGE_EXTENSIONS).join(",");
+const MAX_SNIPPET_VISIBLE_ROWS = 6;
 
 function isModelImageFile(name: string): boolean {
   const lower = name.toLowerCase();
@@ -63,6 +67,35 @@ interface ChatInputProps {
   onToggleToolMessages?: () => void;
 }
 
+interface SnippetContextMenuState {
+  snippetId: string;
+  x: number;
+  y: number;
+}
+
+function composeDraftContent(snippets: DraftSnippet[], text: string): string {
+  const snippetTexts = snippets.map((snippet) => snippet.text.trim()).filter(Boolean);
+  const normalizedText = text.trim();
+  if (snippetTexts.length === 0) {
+    return normalizedText;
+  }
+  if (!normalizedText) {
+    return snippetTexts.join("\n\n");
+  }
+  return [...snippetTexts, normalizedText].join("\n\n");
+}
+
+function parseToolPromptSnippet(text: string): { kind: "Skill" | "MCP"; name: string } | null {
+  const match = text.match(/^Try read and use (Skill|MCP)\s+(.+?)(?:\s*,\s*)?$/);
+  if (!match) {
+    return null;
+  }
+  return {
+    kind: match[1] as "Skill" | "MCP",
+    name: match[2].trim(),
+  };
+}
+
 export function ChatInput({
   onSend,
   disabled,
@@ -75,15 +108,83 @@ export function ChatInput({
   const { t } = useTranslation();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isVoiceOverlayOpen, setIsVoiceOverlayOpen] = useState(false);
+  const [snippetContextMenu, setSnippetContextMenu] = useState<SnippetContextMenuState | null>(null);
+  const [skillPanelDismissed, setSkillPanelDismissed] = useState(false);
+  const [showEnabledOnly, setShowEnabledOnly] = useState(true);
+  const [showAvailableOnly, setShowAvailableOnly] = useState(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachmentsRef = useRef<Attachment[]>([]);
+  const previousSnippetCountRef = useRef(0);
+  const skillPanelRef = useRef<HTMLDivElement>(null);
+  const lastHandledAutoSendTokenRef = useRef(0);
   const currentSessionKey = useChatStore((s) => s.currentSessionKey);
+  const draftSelection = useChatStore((s) =>
+    s.currentSessionKey ? s.draftSelections[s.currentSessionKey] : undefined,
+  );
   const value = useChatStore((s) =>
     s.currentSessionKey ? (s.draftMessages[s.currentSessionKey] ?? "") : "",
   );
+  const snippets = useChatStore((s) =>
+    s.currentSessionKey ? (s.draftSnippets[s.currentSessionKey] ?? []) : [],
+  );
+  const draftAutoSendToken = useChatStore((s) =>
+    s.currentSessionKey ? (s.draftAutoSendTokens[s.currentSessionKey] ?? 0) : 0,
+  );
   const setDraftMessage = useChatStore((s) => s.setDraftMessage);
   const setDraftSelection = useChatStore((s) => s.setDraftSelection);
+  const addDraftSnippet = useChatStore((s) => s.addDraftSnippet);
+  const clearDraftAutoSend = useChatStore((s) => s.clearDraftAutoSend);
+  const updateDraftSnippet = useChatStore((s) => s.updateDraftSnippet);
+  const removeDraftSnippet = useChatStore((s) => s.removeDraftSnippet);
+  const clearDraftSnippets = useChatStore((s) => s.clearDraftSnippets);
+  const { data: skills = [], isLoading: skillsLoading } = useSkills();
+  const { data: mcpServers = [], isLoading: mcpLoading } = useMCPServers();
+  const toolItems = useMemo<ToolPickerItem[]>(
+    () => [
+      ...skills
+        .filter((skill) => skill.source === "workspace")
+        .map((skill) => ({
+          id: `skill:${skill.name}`,
+          name: skill.name,
+          kind: "skill" as const,
+          description: skill.description,
+          enabled: skill.enabled,
+          available: skill.available,
+        })),
+      ...mcpServers.map((server) => ({
+        id: `mcp:${server.name}`,
+        name: server.name,
+        kind: "mcp" as const,
+        description: "This is an MCP server.",
+        enabled: server.enabled !== false,
+        available: true,
+      })),
+    ],
+    [mcpServers, skills]
+  );
+
+  const skillTrigger = useMemo(() => {
+    const cursor = draftSelection?.start ?? value.length;
+    const beforeCursor = value.slice(0, cursor);
+    const match = beforeCursor.match(/(?:^|\s)\/tool(?:\s+([^\n]*))?$/);
+    if (!match) {
+      return null;
+    }
+
+    const slashIndex = beforeCursor.lastIndexOf("/tool");
+    if (slashIndex < 0) {
+      return null;
+    }
+
+    return {
+      start: slashIndex,
+      end: cursor,
+      query: (match[1] ?? "").trim(),
+    };
+  }, [draftSelection?.start, value]);
+
+  const isSkillPanelOpen = !!skillTrigger && !skillPanelDismissed;
 
   const MAX_TEXTAREA_H = 240;
   useLayoutEffect(() => {
@@ -155,34 +256,49 @@ export function ChatInput({
   const isUploading = attachments.some((a) => a.uploading);
 
   const handleSend = useCallback(() => {
-    const text = value.trim();
+    const composedDraft = composeDraftContent(snippets, value);
     const readyAttachments = attachments.filter((a) => a.url && !a.uploading);
-    if ((!text && readyAttachments.length === 0) || disabled || isUploading) return;
+    if ((!composedDraft && readyAttachments.length === 0) || disabled || isUploading) return;
 
     const media = readyAttachments
       .filter((a) => a.sendAsMedia && a.localPath)
       .map((a) => a.localPath as string);
 
-    let content = text;
+    let content = composedDraft;
     for (const att of readyAttachments) {
       if (att.url && !att.sendAsMedia) {
         const isImage = isModelImageFile(att.name);
-        content += `\n${isImage ? `![${att.name}](${att.url})` : `[${att.name}](${att.url})`}`;
+        content += `${content ? "\n" : ""}${isImage ? `![${att.name}](${att.url})` : `[${att.name}](${att.url})`}`;
       }
     }
 
     onSend(content.trim(), media);
     setDraftMessage("", currentSessionKey ?? undefined);
     setDraftSelection(0, 0, currentSessionKey ?? undefined);
+    clearDraftSnippets(currentSessionKey ?? undefined);
+    setSnippetContextMenu(null);
+    setSkillPanelDismissed(false);
     attachments.forEach((att) => revokePreviewUrl(att.previewUrl));
     setAttachments([]);
     if (textareaRef.current) {
       textareaRef.current.style.height = "52px";
       textareaRef.current.style.overflowY = "hidden";
     }
-  }, [value, attachments, disabled, isUploading, onSend, setDraftMessage, currentSessionKey, setDraftSelection]);
+  }, [
+    value,
+    snippets,
+    attachments,
+    disabled,
+    isUploading,
+    onSend,
+    setDraftMessage,
+    currentSessionKey,
+    setDraftSelection,
+    clearDraftSnippets,
+  ]);
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setSkillPanelDismissed(false);
     setDraftMessage(e.target.value, currentSessionKey ?? undefined);
     setDraftSelection(e.target.selectionStart ?? e.target.value.length, e.target.selectionEnd ?? e.target.value.length, currentSessionKey ?? undefined);
     // height adjustment is handled by useLayoutEffect
@@ -201,7 +317,36 @@ export function ChatInput({
       return prev.filter((a) => a.id !== id);
     });
 
-  const canSend = (value.trim().length > 0 || attachments.filter((a) => a.url).length > 0) && !isUploading;
+  const canSend = (composeDraftContent(snippets, value).length > 0 || attachments.filter((a) => a.url).length > 0) && !isUploading;
+
+  const handleSkillSelect = useCallback(
+    (item: ToolPickerItem) => {
+      if (!skillTrigger) {
+        return;
+      }
+
+      const nextValue = value.slice(0, skillTrigger.start) + value.slice(skillTrigger.end);
+      const nextCursor = skillTrigger.start;
+      addDraftSnippet(
+        `Try read and use ${item.kind === "mcp" ? "MCP" : "Skill"} ${item.name} ,`,
+        currentSessionKey ?? undefined,
+      );
+
+      setDraftMessage(nextValue, currentSessionKey ?? undefined);
+      setDraftSelection(nextCursor, nextCursor, currentSessionKey ?? undefined);
+      setSkillPanelDismissed(true);
+
+      window.requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (!el) {
+          return;
+        }
+        el.focus();
+        el.setSelectionRange(nextCursor, nextCursor);
+      });
+    },
+    [addDraftSnippet, currentSessionKey, setDraftMessage, setDraftSelection, skillTrigger, value]
+  );
 
   useEffect(() => {
     if (!isVoiceOverlayOpen) return;
@@ -216,8 +361,95 @@ export function ChatInput({
   }, [isVoiceOverlayOpen]);
 
   useEffect(() => {
+    lastHandledAutoSendTokenRef.current = 0;
+  }, [currentSessionKey]);
+
+  useEffect(() => {
+    if (!currentSessionKey) {
+      lastHandledAutoSendTokenRef.current = 0;
+      return;
+    }
+    if (draftAutoSendToken <= 0 || draftAutoSendToken === lastHandledAutoSendTokenRef.current) {
+      return;
+    }
+    if (disabled || isUploading) {
+      return;
+    }
+    const composedDraft = composeDraftContent(snippets, value);
+    const readyAttachments = attachments.filter((a) => a.url && !a.uploading);
+    if (!composedDraft && readyAttachments.length === 0) {
+      return;
+    }
+    lastHandledAutoSendTokenRef.current = draftAutoSendToken;
+    handleSend();
+    clearDraftAutoSend(currentSessionKey);
+  }, [
+    attachments,
+    clearDraftAutoSend,
+    currentSessionKey,
+    disabled,
+    draftAutoSendToken,
+    handleSend,
+    isUploading,
+    snippets,
+    value,
+  ]);
+
+  useEffect(() => {
     attachmentsRef.current = attachments;
   }, [attachments]);
+
+  useEffect(() => {
+    const closeMenu = () => setSnippetContextMenu(null);
+    window.addEventListener("click", closeMenu);
+    window.addEventListener("scroll", closeMenu, true);
+    window.addEventListener("resize", closeMenu);
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
+      window.removeEventListener("resize", closeMenu);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isSkillPanelOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (
+        skillPanelRef.current?.contains(target ?? null) ||
+        textareaRef.current?.contains(target ?? null)
+      ) {
+        return;
+      }
+      setSkillPanelDismissed(true);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSkillPanelDismissed(true);
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [isSkillPanelOpen]);
+
+  useEffect(() => {
+    const previousCount = previousSnippetCountRef.current;
+    if (snippets.length > previousCount) {
+      window.requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
+    }
+    previousSnippetCountRef.current = snippets.length;
+  }, [snippets.length]);
 
   useEffect(() => {
     return () => {
@@ -324,7 +556,63 @@ export function ChatInput({
             </div>
           )}
 
+          {snippets.length > 0 && (
+            <div className="flex flex-col gap-2 px-4 pt-3">
+              {snippets.map((snippet) => (
+                <div
+                  key={snippet.id}
+                  className="rounded-xl border border-emerald-400/80 bg-emerald-50/80 shadow-sm transition dark:border-emerald-700 dark:bg-emerald-950/20"
+                >
+                  {parseToolPromptSnippet(snippet.text) ? (
+                    <div className="flex flex-wrap items-center gap-2 border-b border-emerald-300/70 px-3 py-2 dark:border-emerald-800/70">
+                      <span className="rounded-full border border-emerald-500/70 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-200">
+                        {parseToolPromptSnippet(snippet.text)?.kind}
+                      </span>
+                      <span className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm dark:bg-emerald-500">
+                        {parseToolPromptSnippet(snippet.text)?.name}
+                      </span>
+                    </div>
+                  ) : null}
+                  <textarea
+                    value={snippet.text}
+                    rows={Math.min(MAX_SNIPPET_VISIBLE_ROWS, Math.max(1, snippet.text.split(/\r?\n/).length))}
+                    onChange={(event) => {
+                      updateDraftSnippet(snippet.id, event.target.value, currentSessionKey ?? undefined);
+                      if (snippetContextMenu?.snippetId === snippet.id && event.target.value.length === 0) {
+                        setSnippetContextMenu(null);
+                      }
+                    }}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setSnippetContextMenu({
+                        snippetId: snippet.id,
+                        x: event.clientX,
+                        y: event.clientY,
+                      });
+                    }}
+                    placeholder="Copied node path prompt"
+                    className="min-h-[44px] max-h-40 w-full resize-none overflow-y-auto rounded-xl border-0 bg-transparent px-3 py-2 text-sm leading-relaxed text-emerald-950 outline-none transition focus:ring-2 focus:ring-emerald-200 dark:text-emerald-100 dark:focus:ring-emerald-900"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="relative">
+            {isSkillPanelOpen && skillTrigger ? (
+              <div ref={skillPanelRef}>
+                <SkillPickerPanel
+                  items={toolItems}
+                  query={skillTrigger.query}
+                  isLoading={skillsLoading || mcpLoading}
+                  enabledOnly={showEnabledOnly}
+                  availableOnly={showAvailableOnly}
+                  onEnabledOnlyChange={setShowEnabledOnly}
+                  onAvailableOnlyChange={setShowAvailableOnly}
+                  onSelectItem={handleSkillSelect}
+                />
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={() => setIsVoiceOverlayOpen(true)}
@@ -425,6 +713,24 @@ export function ChatInput({
         </div>
       </div>
       </div>
+      {snippetContextMenu ? (
+        <div
+          className="fixed z-[120] min-w-[140px] rounded-md border bg-popover p-1 shadow-md"
+          style={{ left: snippetContextMenu.x, top: snippetContextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              removeDraftSnippet(snippetContextMenu.snippetId, currentSessionKey ?? undefined);
+              setSnippetContextMenu(null);
+            }}
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+          >
+            <span>Delete Block</span>
+          </button>
+        </div>
+      ) : null}
     </>
   );
 }

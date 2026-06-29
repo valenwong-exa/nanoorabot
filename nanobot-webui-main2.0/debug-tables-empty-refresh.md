@@ -11,7 +11,7 @@
 1. The SQLcl `tables_folder` query is returning no rows for the resolved schema.
 2. SQLcl is returning rows, but the JSON extraction/parse layer drops them.
 3. The resolved `schema_name` sent into the `tables_folder` query is wrong.
-4. The backend builds table children correctly, but YAML cache update or frontend node replacement overwrites them with an empty node.
+4. The backend builds table children correctly, but cache update or frontend node replacement overwrites them with an empty node.
 
 ## Plan
 

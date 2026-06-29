@@ -1,0 +1,192 @@
+# CLI Reference
+
+Use this page when you know what you want to run and need the command shape. For a guided first run, start with [`quick-start.md`](./quick-start.md).
+
+## Choose a Command
+
+| Goal | Command | Notes |
+|---|---|---|
+| Check the install | `nanobot --version` | If this fails, try `python -m nanobot --version` |
+| Create or refresh config | `nanobot onboard` | Creates `~/.nanobot/config.json` and `~/.nanobot/workspace/` |
+| Use guided setup | `nanobot onboard --wizard` | Best when you prefer prompts over hand-editing JSON |
+| Check config without calling a model | `nanobot status` | Reads the default config and summarizes the active model/provider |
+| Send one test message | `nanobot agent -m "Hello!"` | First proof that install, config, provider, model, and workspace all work |
+| Chat in the terminal | `nanobot agent` | Interactive local chat; exit with `exit`, `/exit`, `:q`, or `Ctrl+D` |
+| Use WebUI or chat apps | `nanobot gateway` | Keep this terminal running, or use `nanobot gateway --background` |
+| Serve an OpenAI-compatible API | `nanobot serve` | Starts `/v1/chat/completions`, `/v1/models`, and `/health` |
+| Check chat channel setup | `nanobot channels status` | Useful before starting `nanobot gateway` |
+| Log in to QR/OAuth-style channels | `nanobot channels login <channel>` | Used by channels such as WhatsApp and WeChat |
+| Log in to OAuth model providers | `nanobot provider login <provider>` | Used by OAuth providers such as OpenAI Codex and GitHub Copilot |
+
+## Global
+
+```bash
+nanobot --help
+nanobot --version
+python -m nanobot --help
+python -m nanobot --version
+```
+
+`python -m nanobot ...` is useful when the package is installed but the `nanobot` script is not on `PATH`.
+
+## Common Patterns
+
+Most day-to-day commands use the default config and workspace. Advanced or multi-instance runs usually pass both paths explicitly:
+
+```bash
+nanobot agent --config ./bot-a/config.json --workspace ./bot-a/workspace -m "Hello"
+nanobot gateway --config ./bot-a/config.json --workspace ./bot-a/workspace
+nanobot serve --config ./bot-a/config.json --workspace ./bot-a/workspace
+```
+
+Use `--verbose` on long-running processes when you need startup or runtime logs:
+
+```bash
+nanobot gateway --verbose
+nanobot serve --verbose
+```
+
+Long-running commands keep working until you stop them. Press `Ctrl+C` in that terminal
+to stop foreground `nanobot gateway` or `nanobot serve`. If you started the gateway
+with `--background`, use `nanobot gateway stop`.
+
+## Setup
+
+| Command | Description |
+|---|---|
+| `nanobot onboard` | Initialize or refresh the default config and workspace |
+| `nanobot onboard --wizard` | Use the interactive setup wizard |
+| `nanobot onboard --config <path> --workspace <path>` | Initialize or refresh a specific instance |
+
+Default paths:
+
+| Path | Default |
+|---|---|
+| Config | `~/.nanobot/config.json` |
+| Workspace | `~/.nanobot/workspace/` |
+
+## Agent CLI
+
+| Command | Description |
+|---|---|
+| `nanobot agent -m "Hello!"` | Send one message and exit |
+| `nanobot agent` | Start interactive terminal chat |
+| `nanobot agent --session <id>` | Use a specific session key |
+| `nanobot agent --workspace <path>` | Override workspace |
+| `nanobot agent --config <path>` | Use a specific config file |
+| `nanobot agent --no-markdown` | Print plain text instead of Rich-rendered Markdown |
+| `nanobot agent --logs` | Show runtime logs while chatting |
+
+Interactive mode exits with `exit`, `quit`, `/exit`, `/quit`, `:q`, or `Ctrl+D`.
+
+## Gateway
+
+`nanobot gateway` starts enabled chat channels, WebUI/WebSocket when configured, cron-backed system jobs, Dream, heartbeat, and the health endpoint. By default it runs in the foreground, which keeps existing scripts and terminal workflows unchanged. Use `--background` when you want a local macOS, Linux, or Windows process that you can manage from the CLI.
+
+| Command | Description |
+|---|---|
+| `nanobot gateway` | Start the gateway in the foreground with config defaults |
+| `nanobot gateway --verbose` | Show verbose runtime output |
+| `nanobot gateway --port <port>` | Override `gateway.port` for the health endpoint |
+| `nanobot gateway --workspace <path>` | Override workspace |
+| `nanobot gateway --config <path>` | Use a specific config file |
+| `nanobot gateway --background` | Start the gateway as a background process |
+| `nanobot gateway status` | Show the recorded background gateway PID, state file, and log file |
+| `nanobot gateway logs --no-follow` | Print recent background gateway logs and exit |
+| `nanobot gateway logs` | Follow background gateway logs |
+| `nanobot gateway restart` | Restart the recorded background gateway with the current config |
+| `nanobot gateway stop` | Stop the recorded background gateway |
+| `nanobot gateway install-service` | Install a systemd user service or macOS LaunchAgent |
+| `nanobot gateway install-service --dry-run` | Preview the generated service file and system commands |
+| `nanobot gateway uninstall-service` | Remove the installed system service |
+
+For custom instances, pass the same selector flags to management commands:
+
+```bash
+nanobot gateway --background --config ./bot-a/config.json --workspace ./bot-a/workspace
+nanobot gateway status --config ./bot-a/config.json --workspace ./bot-a/workspace
+nanobot gateway stop --config ./bot-a/config.json --workspace ./bot-a/workspace
+nanobot gateway install-service --config ./bot-a/config.json --workspace ./bot-a/workspace --name bot-a
+```
+
+`--background` is a lightweight detached process. `install-service` is for
+login/startup integration: Linux uses a systemd user service; macOS uses a
+LaunchAgent plist. System services run the foreground gateway under the OS
+supervisor rather than nesting another background process.
+
+Default health endpoint:
+
+```text
+http://127.0.0.1:18790/health
+```
+
+The bundled WebUI is served by the WebSocket channel, usually on port `8765`, not by the gateway health endpoint.
+
+## OpenAI-Compatible API
+
+| Command | Description |
+|---|---|
+| `nanobot serve` | Start `/v1/chat/completions`, `/v1/models`, and `/health` |
+| `nanobot serve --host <host>` | Override API bind host |
+| `nanobot serve --port <port>` | Override API port |
+| `nanobot serve --timeout <seconds>` | Override per-request timeout |
+| `nanobot serve --verbose` | Show runtime logs |
+| `nanobot serve --workspace <path>` | Override workspace |
+| `nanobot serve --config <path>` | Use a specific config file |
+
+Default API endpoint:
+
+```text
+http://127.0.0.1:8900
+```
+
+See [`openai-api.md`](./openai-api.md) for request examples.
+
+## Status
+
+```bash
+nanobot status
+```
+
+Shows the default config path, workspace path, active model, and provider summary. This command does not currently accept `--config`; use explicit `--config` and `--workspace` on `agent`, `gateway`, or `serve` when debugging a specific instance.
+
+## Channels
+
+| Command | Description |
+|---|---|
+| `nanobot channels status` | Show configured channel status |
+| `nanobot channels status --config <path>` | Show channel status for a specific config |
+| `nanobot channels login <channel>` | Run interactive login for supported channels |
+| `nanobot channels login <channel> --force` | Re-authenticate even if credentials already exist |
+| `nanobot channels login <channel> --config <path>` | Use a specific config file |
+
+Examples:
+
+```bash
+nanobot channels login whatsapp
+nanobot channels login weixin
+nanobot channels status
+```
+
+See [`chat-apps.md`](./chat-apps.md) for channel-specific setup.
+
+## Provider OAuth
+
+| Command | Description |
+|---|---|
+| `nanobot provider login openai-codex` | Authenticate OpenAI Codex provider |
+| `nanobot provider login github-copilot` | Authenticate GitHub Copilot provider |
+| `nanobot provider logout openai-codex` | Remove OpenAI Codex OAuth state |
+| `nanobot provider logout github-copilot` | Remove GitHub Copilot OAuth state |
+
+See [`providers.md`](./providers.md#oauth-providers) for when OAuth providers need explicit provider/model selection.
+
+## Useful First Checks
+
+```bash
+nanobot --version
+nanobot status
+nanobot agent -m "Hello!"
+```
+
+If these fail, use [`troubleshooting.md`](./troubleshooting.md) before debugging WebUI, chat apps, Docker, systemd, or SDK integrations.

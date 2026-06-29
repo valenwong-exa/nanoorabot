@@ -1,8 +1,6 @@
 """Skills routes."""
 
 from __future__ import annotations
-
-import re
 from pathlib import Path
 from typing import Annotated
 
@@ -22,21 +20,17 @@ router = APIRouter()
 _BUILTIN_SKILLS_DIR = Path(__file__).parent.parent.parent.parent / "nanobot" / "skills"
 
 
-def _skill_available(name: str, path: str) -> tuple[bool, str | None]:
-    """Check whether a skill's external binary requirements are met."""
+def _skill_available(loader, name: str, path: str) -> tuple[bool, str | None]:
+    """Check skill availability using the standard SkillsLoader requirement logic."""
     skill_path = Path(path)
     if not skill_path.exists():
         return False, "SKILL.md not found"
-    content = skill_path.read_text(encoding="utf-8")
-    # Look for "## Requirements" section with `command: <bin>` lines
-    for line in content.splitlines():
-        m = re.match(r"^\s*-?\s*`?([a-zA-Z0-9_-]+)`?\s*(?:binary|command|bin|cli)", line, re.I)
-        if m:
-            import shutil
-            bin_name = m.group(1)
-            if not shutil.which(bin_name):
-                return False, f"binary `{bin_name}` not found in PATH"
-    return True, None
+    skill_meta = loader._get_skill_meta(name)
+    available = loader._check_requirements(skill_meta)
+    if available:
+        return True, None
+    missing = loader._get_missing_requirements(skill_meta)
+    return False, missing or "requirements not met"
 
 
 @router.get("", response_model=list[SkillInfo])
@@ -52,7 +46,7 @@ async def list_skills(
     disabled = get_disabled_skills()
     result = []
     for s in all_skills:
-        available, reason = _skill_available(s["name"], s["path"])
+        available, reason = _skill_available(loader, s["name"], s["path"])
         description = loader._get_skill_description(s["name"])
         result.append(
             SkillInfo(

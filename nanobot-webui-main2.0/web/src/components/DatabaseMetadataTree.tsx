@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   Ban,
   ChevronDown,
   ChevronRight,
   Clock3,
+  Copy,
   Database,
   Eye,
   FileCode,
@@ -14,24 +16,59 @@ import {
   LoaderCircle,
   Package,
   RefreshCw,
+  Search,
   Table2,
   User,
   Users,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 import {
+  fetchSourceDdl,
+  fetchTableDdl,
   loadDatabaseMetadataNode,
   openDatabaseMetadata,
   refreshDatabaseMetadataNode,
 } from "../api/databaseMetadataApi";
 import { cn } from "../lib/utils";
-import type { MetadataTreeNode } from "../types/databaseMetadata";
+import { useChatStore } from "../stores/chatStore";
+import type { MetadataTreeNode, OpenDatabaseMetadataResponse } from "../types/databaseMetadata";
+import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 
-const DEFAULT_EXPANDED_NODE_IDS = new Set(["root", "schemas", "users"]);
+const DEFAULT_EXPANDED_NODE_IDS = new Set(["root", "dbops", "schemas"]);
+const TREE_ROW_HEIGHT = 34;
+const TREE_OVERSCAN_ROWS = 12;
+const LARGE_FOLDER_PAGE_SIZE = 1000;
+const LARGE_FOLDER_TYPES = new Set([
+  "tables_folder",
+  "dictionary_table_folder",
+  "indexes_folder",
+  "views_folder",
+  "dynamic_views_folder",
+  "package_specs_folder",
+  "package_bodies_folder",
+  "functions_folder",
+  "procedures_folder",
+  "queues_folder",
+  "triggers_folder",
+  "types_folder",
+  "type_bodies_folder",
+  "sequences_folder",
+  "materialized_views_folder",
+  "synonyms_folder",
+  "db_links_folder",
+  "directories_folder",
+  "java_objects_folder",
+  "scheduler_jobs_folder",
+]);
 const FORCE_INTERNAL_ICON_NODE_TYPES = new Set([
+  "dbops_root",
   "table",
   "index",
   "view",
+  "dynamic_view",
+  "useful_diagnoses_folder",
+  "useful_diagnosis",
   "package_spec",
   "package_body",
   "function",
@@ -50,6 +87,7 @@ const FORCE_INTERNAL_ICON_NODE_TYPES = new Set([
   "empty",
 ]);
 const REFRESHABLE_NODE_TYPES = new Set([
+  "dbops_root",
   "schemas_root",
   "schema",
   "users_root",
@@ -57,6 +95,9 @@ const REFRESHABLE_NODE_TYPES = new Set([
   "tables_folder",
   "indexes_folder",
   "views_folder",
+  "dynamic_views_folder",
+  "dictionary_table_folder",
+  "useful_diagnoses_folder",
   "package_specs_folder",
   "package_bodies_folder",
   "functions_folder",
@@ -73,6 +114,46 @@ const REFRESHABLE_NODE_TYPES = new Set([
   "java_objects_folder",
   "scheduler_jobs_folder",
 ]);
+const SCHEMA_OBJECT_NODE_TYPES = new Set([
+  "table",
+  "index",
+  "view",
+  "package_spec",
+  "package_body",
+  "function",
+  "procedure",
+  "queue",
+  "trigger",
+  "type",
+  "type_body",
+  "sequence",
+  "materialized_view",
+  "synonym",
+  "db_link",
+  "directory",
+  "java_object",
+  "scheduler_job",
+]);
+const DDL_CACHE_FOLDER_BY_NODE_TYPE: Record<string, string> = {
+  table: "Tables",
+  index: "Indexes",
+  view: "Views",
+  package_spec: "Package Specs",
+  package_body: "Package Bodies",
+  function: "Functions",
+  procedure: "Procedures",
+  queue: "Queues",
+  trigger: "Triggers",
+  type: "Types",
+  type_body: "Type Bodies",
+  sequence: "Sequences",
+  materialized_view: "Materialized Views",
+  synonym: "Synonyms",
+  db_link: "DB Links",
+  directory: "Directories",
+  java_object: "Java Objects",
+  scheduler_job: "Scheduler Jobs",
+};
 
 interface DatabaseMetadataTreeProps {
   connectionId?: string | null;
@@ -80,6 +161,8 @@ interface DatabaseMetadataTreeProps {
   displayName?: string | null;
   databaseStatus?: string | null;
   className?: string;
+  openNonce?: number;
+  onOpenSuccess?: (response: OpenDatabaseMetadataResponse) => void;
 }
 
 interface ContextMenuState {
@@ -88,11 +171,88 @@ interface ContextMenuState {
   y: number;
 }
 
+interface ManualCopyState {
+  text: string;
+  label: string;
+}
+
+interface ObjectViewDialogState {
+  node: MetadataTreeNode;
+  sqlText: string;
+}
+
+interface VisibleNodeRow {
+  kind: "node";
+  node: MetadataTreeNode;
+  depth: number;
+}
+
+interface VisibleFolderControlsRow {
+  kind: "folder-controls";
+  node: MetadataTreeNode;
+  depth: number;
+  totalChildren: number;
+  filteredChildren: number;
+  visibleChildren: number;
+  filterText: string;
+  hasMore: boolean;
+}
+
+type VisibleTreeRow = VisibleNodeRow | VisibleFolderControlsRow;
+
+function normalizeCodeLines(text: string): string[] {
+  return text.replace(/\r\n/g, "\n").split("\n");
+}
+
+function getSelectedTextWithinContainer(container: HTMLElement | null): string {
+  if (typeof window === "undefined" || !container) {
+    return "";
+  }
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    return "";
+  }
+  const range = selection.getRangeAt(0);
+  const commonAncestor = range.commonAncestorContainer;
+  const containingNode =
+    commonAncestor.nodeType === Node.TEXT_NODE ? commonAncestor.parentNode : commonAncestor;
+  if (!containingNode || !container.contains(containingNode)) {
+    return "";
+  }
+  return selection.toString().replace(/\r\n/g, "\n").trim();
+}
+
 function getErrorMessage(error: unknown, fallback: string): string {
   return (
     (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
     fallback
   );
+}
+
+function legacyCopyText(text: string): boolean {
+  if (typeof document === "undefined") {
+    return false;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.top = "-1000px";
+  textarea.style.left = "-1000px";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+
+  try {
+    return document.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    document.body.removeChild(textarea);
+  }
 }
 
 function isExpandable(node: MetadataTreeNode): boolean {
@@ -106,6 +266,8 @@ function getNodeIcon(nodeType: string): LucideIcon {
     case "connection_info":
       return Database;
     case "connected_schema":
+    case "dbops_root":
+      return Wrench;
     case "schemas_root":
     case "schema":
     case "users_root":
@@ -114,6 +276,8 @@ function getNodeIcon(nodeType: string): LucideIcon {
       return User;
     case "tables_folder":
     case "table":
+    case "dictionary_table_folder":
+    case "dictionary_table_item":
       return Table2;
     case "indexes_folder":
     case "index":
@@ -122,9 +286,14 @@ function getNodeIcon(nodeType: string): LucideIcon {
       return Hash;
     case "views_folder":
     case "view":
+    case "dynamic_views_folder":
+    case "dynamic_view":
     case "materialized_views_folder":
     case "materialized_view":
       return Eye;
+    case "useful_diagnoses_folder":
+    case "useful_diagnosis":
+      return Search;
     case "package_specs_folder":
     case "package_spec":
     case "package_bodies_folder":
@@ -209,51 +378,246 @@ function getRelativeNodePath(node: MetadataTreeNode, displayName?: string | null
   return relativePath;
 }
 
+function isObjectNamePathNode(node: MetadataTreeNode): boolean {
+  return node.type === "dynamic_view" || node.type === "dictionary_table_item";
+}
+
 function formatNodePathsForCopy(
   nodes: MetadataTreeNode[],
   sqlclConnectionName?: string | null,
   displayName?: string | null,
 ): string {
   const connectionName = sqlclConnectionName?.trim() || "unknown";
+  if (nodes.length > 0 && nodes.every((node) => isObjectNamePathNode(node))) {
+    const objectNames = nodes.map((node) => node.label.trim()).filter(Boolean);
+    return `Please use oracle sqlcl MCP tool to connect to database ${connectionName}. This is a development task. Use the local metadata or code cache in the workspace when available, and only fetch additional database metadata when needed. Current targets: ${objectNames.join(", ")}. Make the requested changes, then compile or validate affected objects if needed.`;
+  }
+  const schemaAccessPrefix = formatSchemaAccessPrefix(nodes, sqlclConnectionName);
+  const ddlPrefix = formatObjectDdlAvailabilityPrefix(nodes, sqlclConnectionName);
   const relativePaths = nodes.map((node) => getRelativeNodePath(node, displayName));
+  const instructionPrefix =
+    `Please use oracle sqlcl MCP tool to connect to database ${connectionName}. ` +
+    "This is a development task. Prefer the local DDL or code cache in the workspace when available. " +
+    "Use SQLcl MCP only when you need additional metadata or need to validate database state. " +
+    "If the requested work changes objects, update the relevant local files and compile or validate the affected objects when needed.";
 
   if (relativePaths.length <= 1) {
-    return `Please use oracle sqlcl MCP tool to connect to database ${connectionName},  check ${relativePaths[0] ?? "/"}`;
+    return [
+      instructionPrefix,
+      `Current target path: ${relativePaths[0] ?? "/"}.`,
+      ddlPrefix.trim(),
+      schemaAccessPrefix.trim(),
+      "For follow-up requests, treat this path as the current development context unless another target is specified.",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
   }
 
   return [
-    `Please use oracle sqlcl MCP tool to connect to database ${connectionName},  then check these paths:`,
+    instructionPrefix,
+    ddlPrefix.trim(),
+    schemaAccessPrefix.trim(),
+    "Current target paths:",
     ...relativePaths.map((path) => `- ${path}`),
-  ].join("\n");
+    "For follow-up requests, treat these paths as the current development scope unless another target is specified.",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
-function collectVisibleNodeIds(tree: MetadataTreeNode, expandedNodeIds: Set<string>): string[] {
-  const result: string[] = [];
+function formatNodeNamePromptForCopy(
+  node: MetadataTreeNode,
+  sqlclConnectionName?: string | null,
+  displayName?: string | null,
+): string {
+  const connectionName = sqlclConnectionName?.trim() || "unknown";
+  const relativePath = getRelativeNodePath(node, displayName).replace(/^\/+/, "") || node.label.trim() || "/";
+  return `Please use oracle sqlcl MCP tool to connect to database ${connectionName}. Current object path: ${relativePath}. For follow-up requests, unless another object is specified, treat this path as the current object context.`;
+}
 
-  const visit = (node: MetadataTreeNode) => {
-    result.push(node.id);
+function isSqlCopyNode(node: MetadataTreeNode): boolean {
+  return node.type === "useful_diagnosis" && typeof node.metadata?.sqlText === "string";
+}
+
+function formatDiagnosisSqlForCopy(node: MetadataTreeNode, sqlclConnectionName?: string | null): string {
+  const connectionName = sqlclConnectionName?.trim() || "unknown";
+  const sqlText = typeof node.metadata?.sqlText === "string" ? node.metadata.sqlText.trim() : "";
+  return `Please use oracle sqlcl MCP tool to connect to database ${connectionName},   check ${node.label} through SQL "${sqlText}"`;
+}
+
+function isSchemaObjectNode(node: MetadataTreeNode): boolean {
+  return SCHEMA_OBJECT_NODE_TYPES.has(node.type);
+}
+
+function formatSchemaAccessLine(
+  node: MetadataTreeNode,
+  sqlclConnectionName?: string | null,
+): string | null {
+  if (node.type !== "schema") {
+    return null;
+  }
+  const connectionName = sqlclConnectionName?.trim();
+  const schemaName =
+    typeof node.metadata?.schemaName === "string" ? node.metadata.schemaName.trim() : node.label.trim();
+  if (!connectionName || !schemaName) {
+    return null;
+  }
+  return `${schemaName} schema is accessible via the SQLcl MCP tool using connection ${connectionName}. Read the ora-ops-metadata skill for more information.`;
+}
+
+function formatSchemaAccessPrefix(
+  nodes: MetadataTreeNode[],
+  sqlclConnectionName?: string | null,
+): string {
+  const lines = Array.from(
+    new Set(
+      nodes
+        .map((node) => formatSchemaAccessLine(node, sqlclConnectionName))
+        .filter((line): line is string => Boolean(line)),
+    ),
+  );
+  return lines.length > 0 ? `\n${lines.join("\n")}` : "";
+}
+
+function formatObjectDdlAvailabilityLine(
+  node: MetadataTreeNode,
+  sqlclConnectionName?: string | null,
+): string | null {
+  if (!isSchemaObjectNode(node)) {
+    return null;
+  }
+  const connectionName = sqlclConnectionName?.trim();
+  const schemaName =
+    typeof node.metadata?.schemaName === "string" ? node.metadata.schemaName.trim() : "";
+  const objectName =
+    typeof node.metadata?.objectName === "string" ? node.metadata.objectName.trim() : node.label.trim();
+  const objectTypeFolder = DDL_CACHE_FOLDER_BY_NODE_TYPE[node.type];
+  if (!connectionName || !schemaName || !objectName || !objectTypeFolder) {
+    return null;
+  }
+  return `Local cached DDL is available at <workspace>\\ora-ops-metadata\\metadata_cache\\${connectionName}\\${schemaName}\\${objectTypeFolder}\\${objectName}.sql`;
+}
+
+function formatObjectDdlAvailabilityPrefix(
+  nodes: MetadataTreeNode[],
+  sqlclConnectionName?: string | null,
+): string {
+  const lines = nodes
+    .map((node) => formatObjectDdlAvailabilityLine(node, sqlclConnectionName))
+    .filter((line): line is string => Boolean(line));
+  return lines.length > 0 ? `${lines.join("\n")}\n\n` : "";
+}
+
+function isTableNode(node: MetadataTreeNode): boolean {
+  return node.type === "table";
+}
+
+function isSourceDdlNode(node: MetadataTreeNode): boolean {
+  return (
+    node.type === "index" ||
+    node.type === "view" ||
+    node.type === "trigger" ||
+    node.type === "sequence" ||
+    node.type === "procedure" ||
+    node.type === "function" ||
+    node.type === "package_spec" ||
+    node.type === "package_body"
+  );
+}
+
+function formatObjectDdlPrompt(
+  node: MetadataTreeNode,
+  sqlText: string,
+  sqlclConnectionName?: string | null,
+  displayName?: string | null,
+): string {
+  const relativePath = getRelativeNodePath(node, displayName);
+  const ddlPrefix = formatObjectDdlAvailabilityPrefix([node], sqlclConnectionName);
+  return `${ddlPrefix}Check ${relativePath} DDL below:\n\n${sqlText}`;
+}
+
+function formatSelectedCodePrompt(
+  node: MetadataTreeNode,
+  selectedText: string,
+  sqlclConnectionName?: string | null,
+  displayName?: string | null,
+): string {
+  const connectionName = sqlclConnectionName?.trim() || "unknown";
+  const relativePath = getRelativeNodePath(node, displayName);
+  const ddlPrefix = formatObjectDdlAvailabilityPrefix([node], sqlclConnectionName).trim();
+  const parts = [
+    `Please use oracle sqlcl MCP tool to connect to database ${connectionName}. Focus on the selected code in ${relativePath}.`,
+    `Current object path: ${relativePath}.`,
+    ddlPrefix,
+    "Use the selected code below as the primary fragment to analyze or modify. Prefer local cache. If you change it, update local files first, then compile or validate and report errors.",
+    "Selected code:",
+    "```sql",
+    selectedText.trim(),
+    "```",
+  ];
+  return parts.filter(Boolean).join("\n\n");
+}
+
+function formatSelectedCodeOnly(selectedText: string): string {
+  return selectedText.trim();
+}
+
+function findParentNode(tree: MetadataTreeNode, targetNodeId: string): MetadataTreeNode | null {
+  for (const child of tree.children ?? []) {
+    if (child.id === targetNodeId) {
+      return tree;
+    }
+    const nestedParent = findParentNode(child, targetNodeId);
+    if (nestedParent) {
+      return nestedParent;
+    }
+  }
+  return null;
+}
+
+function collectVisibleTreeRows(
+  tree: MetadataTreeNode,
+  expandedNodeIds: Set<string>,
+  folderFilters: Map<string, string>,
+  folderVisibleCounts: Map<string, number>,
+): VisibleTreeRow[] {
+  const result: VisibleTreeRow[] = [];
+
+  const visit = (node: MetadataTreeNode, depth: number) => {
+    result.push({ kind: "node", node, depth });
     if (expandedNodeIds.has(node.id)) {
-      for (const child of node.children ?? []) {
-        visit(child);
+      const rawChildren = node.children ?? [];
+      const filterText = folderFilters.get(node.id)?.trim().toLowerCase() ?? "";
+      const supportsLargeFolderControls = LARGE_FOLDER_TYPES.has(node.type);
+      const shouldRenderControls = supportsLargeFolderControls;
+      const filteredChildren = shouldRenderControls
+        ? rawChildren.filter((child) => child.label.toLowerCase().includes(filterText))
+        : rawChildren;
+      const visibleChildrenCount = shouldRenderControls
+        ? Math.min(filteredChildren.length, folderVisibleCounts.get(node.id) ?? LARGE_FOLDER_PAGE_SIZE)
+        : filteredChildren.length;
+
+      if (shouldRenderControls) {
+        result.push({
+          kind: "folder-controls",
+          node,
+          depth: depth + 1,
+          totalChildren: rawChildren.length,
+          filteredChildren: filteredChildren.length,
+          visibleChildren: visibleChildrenCount,
+          filterText: folderFilters.get(node.id) ?? "",
+          hasMore: visibleChildrenCount < filteredChildren.length,
+        });
+      }
+
+      for (const child of filteredChildren.slice(0, visibleChildrenCount)) {
+        visit(child, depth + 1);
       }
     }
   };
 
-  visit(tree);
+  visit(tree, 0);
   return result;
-}
-
-function findNodeById(tree: MetadataTreeNode, nodeId: string): MetadataTreeNode | null {
-  if (tree.id === nodeId) {
-    return tree;
-  }
-  for (const child of tree.children ?? []) {
-    const found = findNodeById(child, nodeId);
-    if (found) {
-      return found;
-    }
-  }
-  return null;
 }
 
 export function DatabaseMetadataTree({
@@ -262,7 +626,10 @@ export function DatabaseMetadataTree({
   displayName,
   databaseStatus,
   className,
+  openNonce,
+  onOpenSuccess,
 }: DatabaseMetadataTreeProps) {
+  const { t } = useTranslation();
   const [tree, setTree] = useState<MetadataTreeNode | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -273,20 +640,61 @@ export function DatabaseMetadataTree({
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
   const [selectionAnchorNodeId, setSelectionAnchorNodeId] = useState<string | null>(null);
   const [missingPngIcons, setMissingPngIcons] = useState<Set<string>>(new Set());
+  const [manualCopyState, setManualCopyState] = useState<ManualCopyState | null>(null);
+  const [objectViewDialog, setObjectViewDialog] = useState<ObjectViewDialogState | null>(null);
+  const [selectedSourceText, setSelectedSourceText] = useState("");
+  const [hasInsertedSelectionContext, setHasInsertedSelectionContext] = useState(false);
+  const [folderFilters, setFolderFilters] = useState<Map<string, string>>(new Map());
+  const [folderVisibleCounts, setFolderVisibleCounts] = useState<Map<string, number>>(new Map());
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(400);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const manualCopyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const sourceSelectionContainerRef = useRef<HTMLDivElement | null>(null);
+  const sourceSelectionTextRef = useRef("");
+  const onOpenSuccessRef = useRef(onOpenSuccess);
+  const addDraftSnippet = useChatStore((s) => s.addDraftSnippet);
   const normalizedDatabaseStatus = (databaseStatus ?? "").toUpperCase();
   const isInvalidDatabase = normalizedDatabaseStatus === "INVALID";
 
   useEffect(() => {
-    const closeMenu = () => setContextMenu(null);
-    window.addEventListener("click", closeMenu);
-    window.addEventListener("scroll", closeMenu, true);
-    window.addEventListener("resize", closeMenu);
+    onOpenSuccessRef.current = onOpenSuccess;
+  }, [onOpenSuccess]);
+
+  useEffect(() => {
+    const closeMenus = () => {
+      setContextMenu(null);
+    };
+    window.addEventListener("click", closeMenus);
+    window.addEventListener("scroll", closeMenus, true);
+    window.addEventListener("resize", closeMenus);
     return () => {
-      window.removeEventListener("click", closeMenu);
-      window.removeEventListener("scroll", closeMenu, true);
-      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("click", closeMenus);
+      window.removeEventListener("scroll", closeMenus, true);
+      window.removeEventListener("resize", closeMenus);
     };
   }, []);
+
+  useEffect(() => {
+    sourceSelectionTextRef.current = "";
+    setSelectedSourceText("");
+    setHasInsertedSelectionContext(false);
+  }, [objectViewDialog]);
+
+  useEffect(() => {
+    if (!manualCopyState) {
+      return;
+    }
+
+    const textarea = manualCopyTextareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+  }, [manualCopyState]);
 
   useEffect(() => {
     if (!connectionId || !sqlclConnectionName) {
@@ -296,6 +704,9 @@ export function DatabaseMetadataTree({
       setExpandedNodeIds(new Set(DEFAULT_EXPANDED_NODE_IDS));
       setSelectedNodeIds(new Set());
       setSelectionAnchorNodeId(null);
+      setFolderFilters(new Map());
+      setFolderVisibleCounts(new Map());
+      setScrollTop(0);
       return;
     }
 
@@ -307,6 +718,9 @@ export function DatabaseMetadataTree({
       setExpandedNodeIds(new Set(DEFAULT_EXPANDED_NODE_IDS));
       setSelectedNodeIds(new Set());
       setSelectionAnchorNodeId(null);
+      setFolderFilters(new Map());
+      setFolderVisibleCounts(new Map());
+      setScrollTop(0);
       return;
     }
 
@@ -323,10 +737,14 @@ export function DatabaseMetadataTree({
           return;
         }
         setTree(response.tree);
+        onOpenSuccessRef.current?.(response);
         setFromCache(response.fromCache);
         setExpandedNodeIds(collectAutoExpandedNodeIds(response.tree));
         setSelectedNodeIds(new Set());
         setSelectionAnchorNodeId(null);
+        setFolderFilters(new Map());
+        setFolderVisibleCounts(new Map());
+        setScrollTop(0);
       })
       .catch((nextError: unknown) => {
         if (cancelled) {
@@ -344,22 +762,65 @@ export function DatabaseMetadataTree({
     return () => {
       cancelled = true;
     };
-  }, [connectionId, displayName, isInvalidDatabase, sqlclConnectionName]);
+  }, [connectionId, displayName, isInvalidDatabase, openNonce, sqlclConnectionName]);
 
   const canRenderTree = useMemo(() => Boolean(tree && connectionId && sqlclConnectionName), [tree, connectionId, sqlclConnectionName]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const measureViewport = () => {
+      setViewportHeight(container.clientHeight || 400);
+    };
+
+    measureViewport();
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => measureViewport()) : null;
+    resizeObserver?.observe(container);
+    window.addEventListener("resize", measureViewport);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", measureViewport);
+    };
+  }, [canRenderTree]);
+  const visibleRows = useMemo(
+    () => (tree ? collectVisibleTreeRows(tree, expandedNodeIds, folderFilters, folderVisibleCounts) : []),
+    [expandedNodeIds, folderFilters, folderVisibleCounts, tree],
+  );
   const visibleNodeIds = useMemo(
-    () => (tree ? collectVisibleNodeIds(tree, expandedNodeIds) : []),
-    [expandedNodeIds, tree],
+    () =>
+      visibleRows
+        .filter((row): row is VisibleNodeRow => row.kind === "node")
+        .map(({ node }) => node.id),
+    [visibleRows],
+  );
+  const visibleNodeIndexMap = useMemo(
+    () =>
+      new Map(
+        visibleRows
+          .filter((row): row is VisibleNodeRow => row.kind === "node")
+          .map(({ node }, index) => [node.id, index]),
+      ),
+    [visibleRows],
   );
   const selectedNodes = useMemo(() => {
-    if (!tree) {
-      return [] as MetadataTreeNode[];
-    }
-    return visibleNodeIds
-      .filter((nodeId) => selectedNodeIds.has(nodeId))
-      .map((nodeId) => findNodeById(tree, nodeId))
-      .filter((node): node is MetadataTreeNode => Boolean(node));
-  }, [selectedNodeIds, tree, visibleNodeIds]);
+    return visibleRows
+      .filter((row): row is VisibleNodeRow => row.kind === "node" && selectedNodeIds.has(row.node.id))
+      .map(({ node }) => node);
+  }, [selectedNodeIds, visibleRows]);
+  const totalVisibleRows = visibleRows.length;
+  const startRowIndex = Math.max(0, Math.floor(scrollTop / TREE_ROW_HEIGHT) - TREE_OVERSCAN_ROWS);
+  const endRowIndex = Math.min(
+    totalVisibleRows,
+    Math.ceil((scrollTop + viewportHeight) / TREE_ROW_HEIGHT) + TREE_OVERSCAN_ROWS,
+  );
+  const virtualRows = visibleRows.slice(startRowIndex, endRowIndex);
+  const topSpacerHeight = startRowIndex * TREE_ROW_HEIGHT;
+  const bottomSpacerHeight = Math.max(0, (totalVisibleRows - endRowIndex) * TREE_ROW_HEIGHT);
 
   async function handleLoadNode(node: MetadataTreeNode): Promise<void> {
     if (!connectionId || !sqlclConnectionName) {
@@ -375,6 +836,19 @@ export function DatabaseMetadataTree({
         schemaName: typeof node.metadata?.schemaName === "string" ? node.metadata.schemaName : undefined,
       });
       setTree((prev) => (prev ? replaceNodeInTree(prev, response.node) : prev));
+      setFolderVisibleCounts((prev) => {
+        const next = new Map(prev);
+        next.set(node.id, LARGE_FOLDER_PAGE_SIZE);
+        return next;
+      });
+      setFolderFilters((prev) => {
+        if (!prev.has(node.id)) {
+          return prev;
+        }
+        const next = new Map(prev);
+        next.delete(node.id);
+        return next;
+      });
     } catch (nextError) {
       toast.error(getErrorMessage(nextError, `Failed to load ${node.label}`));
     } finally {
@@ -401,6 +875,19 @@ export function DatabaseMetadataTree({
       });
       setTree((prev) => (prev ? replaceNodeInTree(prev, response.node) : prev));
       setExpandedNodeIds((prev) => new Set(prev).add(node.id));
+      setFolderVisibleCounts((prev) => {
+        const next = new Map(prev);
+        next.set(node.id, LARGE_FOLDER_PAGE_SIZE);
+        return next;
+      });
+      setFolderFilters((prev) => {
+        if (!prev.has(node.id)) {
+          return prev;
+        }
+        const next = new Map(prev);
+        next.delete(node.id);
+        return next;
+      });
       toast.success(`Refreshed ${node.label}`);
       setFromCache(false);
     } catch (nextError) {
@@ -415,14 +902,35 @@ export function DatabaseMetadataTree({
     }
   }
 
-  async function handleCopy(text: string, label: string) {
+  async function handleCopy(text: string, label: string, options?: { addAsSnippet?: boolean }) {
+    let copied = false;
     try {
-      await navigator.clipboard.writeText(text);
-      toast.success(`Copied ${label}`);
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } else if (legacyCopyText(text)) {
+        copied = true;
+      } else {
+        setManualCopyState({ text, label });
+      }
     } catch {
-      toast.error(`Failed to copy ${label}`);
+      if (legacyCopyText(text)) {
+        copied = true;
+      } else {
+        setManualCopyState({ text, label });
+      }
     } finally {
       setContextMenu(null);
+    }
+    if (options?.addAsSnippet) {
+      addDraftSnippet(text);
+      if (!copied) {
+        toast.error(`Inserted into the chat input, but clipboard access is unavailable. Copy ${label} manually.`);
+      }
+      return;
+    }
+    if (!copied) {
+      toast.error(`Clipboard access is unavailable. Copy ${label} manually.`);
     }
   }
 
@@ -450,9 +958,9 @@ export function DatabaseMetadataTree({
       return;
     }
 
-    const visibleIndex = visibleNodeIds.indexOf(node.id);
+    const visibleIndex = visibleNodeIndexMap.get(node.id) ?? -1;
     const anchorId = selectionAnchorNodeId ?? node.id;
-    const anchorIndex = visibleNodeIds.indexOf(anchorId);
+    const anchorIndex = visibleNodeIndexMap.get(anchorId) ?? -1;
 
     if (event.shiftKey && anchorIndex >= 0 && visibleIndex >= 0) {
       const start = Math.min(anchorIndex, visibleIndex);
@@ -487,7 +995,218 @@ export function DatabaseMetadataTree({
     return [targetNode];
   }
 
-  function renderNode(node: MetadataTreeNode, depth: number) {
+  function resolveRefreshTargetNode(targetNode: MetadataTreeNode): MetadataTreeNode | null {
+    if (REFRESHABLE_NODE_TYPES.has(targetNode.type)) {
+      return targetNode;
+    }
+    if (!tree || !isSchemaObjectNode(targetNode)) {
+      return null;
+    }
+    const parentNode = findParentNode(tree, targetNode.id);
+    if (!parentNode) {
+      return null;
+    }
+    return REFRESHABLE_NODE_TYPES.has(parentNode.type) ? parentNode : null;
+  }
+
+  async function fetchNodeDdl(
+    node: MetadataTreeNode,
+    options?: { forceRefresh?: boolean },
+  ) {
+    if (!connectionId || !sqlclConnectionName) {
+      return null;
+    }
+    const schemaName =
+      typeof node.metadata?.schemaName === "string" ? node.metadata.schemaName.trim() : "";
+    const objectName =
+      typeof node.metadata?.objectName === "string" ? node.metadata.objectName.trim() : node.label.trim();
+    if (!schemaName || !objectName) {
+      toast.error(`Missing schema or object name for ${node.label}`);
+      setContextMenu(null);
+      return null;
+    }
+
+    setLoadingNodeIds((prev) => new Set(prev).add(node.id));
+    try {
+      return isTableNode(node)
+        ? await fetchTableDdl({
+            connectionId,
+            sqlclConnectionName,
+            schemaName,
+            tableName: objectName,
+            forceRefresh: options?.forceRefresh ?? false,
+          })
+        : await fetchSourceDdl({
+            connectionId,
+            sqlclConnectionName,
+            schemaName,
+            objectType: node.type,
+            objectName,
+            forceRefresh: options?.forceRefresh ?? false,
+          });
+    } catch (nextError) {
+      toast.error(getErrorMessage(nextError, `Failed to load DDL for ${objectName}`));
+      return null;
+    } finally {
+      setLoadingNodeIds((prev) => {
+        const next = new Set(prev);
+        next.delete(node.id);
+        return next;
+      });
+    }
+  }
+
+  async function handleNodeDdl(
+    node: MetadataTreeNode,
+    options?: { forceRefresh?: boolean; insertPrompt?: boolean },
+  ) {
+    const response = await fetchNodeDdl(node, options);
+    if (!response) {
+      setContextMenu(null);
+      return;
+    }
+    const schemaName =
+      typeof node.metadata?.schemaName === "string" ? node.metadata.schemaName.trim() : "";
+    const objectName =
+      typeof node.metadata?.objectName === "string" ? node.metadata.objectName.trim() : node.label.trim();
+    if (options?.insertPrompt) {
+      addDraftSnippet(formatObjectDdlPrompt(node, response.sqlText, sqlclConnectionName, displayName));
+      toast.success(
+        response.cacheHit
+          ? `Inserted cached DDL for ${schemaName}.${objectName}`
+          : `Fetched and inserted DDL for ${schemaName}.${objectName}`,
+      );
+    } else {
+      toast.success(`Refreshed DDL for ${schemaName}.${objectName}`);
+    }
+    setContextMenu(null);
+  }
+
+  async function handleViewNodeDdl(node: MetadataTreeNode) {
+    const response = await fetchNodeDdl(node);
+    if (!response) {
+      setContextMenu(null);
+      return;
+    }
+    setObjectViewDialog({
+      node,
+      sqlText: response.sqlText,
+    });
+    if (response.cacheHit) {
+      toast.success(`Opened cached DDL for ${node.label}`);
+    } else {
+      toast.success(`Fetched and opened DDL for ${node.label}`);
+    }
+    setContextMenu(null);
+  }
+
+  async function handleRefreshViewDialog() {
+    if (!objectViewDialog) {
+      return;
+    }
+    const response = await fetchNodeDdl(objectViewDialog.node, { forceRefresh: true });
+    if (!response) {
+      return;
+    }
+    setObjectViewDialog((prev) =>
+      prev
+        ? {
+            ...prev,
+            sqlText: response.sqlText,
+          }
+        : prev,
+    );
+    toast.success(`Refreshed DDL for ${objectViewDialog.node.label}`);
+    sourceSelectionTextRef.current = "";
+    setSelectedSourceText("");
+  }
+
+  function handleAddSelectedCodeToPrompt() {
+    const selectedText = sourceSelectionTextRef.current.trim();
+    if (!objectViewDialog || !selectedText) {
+      return;
+    }
+    addDraftSnippet(
+      hasInsertedSelectionContext
+        ? formatSelectedCodeOnly(selectedText)
+        : formatSelectedCodePrompt(objectViewDialog.node, selectedText, sqlclConnectionName, displayName),
+    );
+    setHasInsertedSelectionContext(true);
+    toast.success(t("chat.sourceSelectionAddedToPrompt"));
+  }
+
+  function updateSourceSelectionText() {
+    const nextText = getSelectedTextWithinContainer(sourceSelectionContainerRef.current);
+    sourceSelectionTextRef.current = nextText;
+    setSelectedSourceText(nextText);
+  }
+
+  function renderFolderControlsRow({
+    node,
+    depth,
+    totalChildren,
+    filteredChildren,
+    visibleChildren,
+    filterText,
+    hasMore,
+  }: VisibleFolderControlsRow) {
+    const showingSummary =
+      filteredChildren === totalChildren
+        ? `Showing ${visibleChildren} / ${totalChildren}`
+        : `Showing ${visibleChildren} / ${filteredChildren} matches`;
+
+    return (
+      <div key={`${node.id}:controls`} className="min-w-max">
+        <div
+          className="flex min-w-max items-center gap-2 rounded-md px-1.5 py-1"
+          style={{ paddingLeft: `${depth * 14 + 4}px`, minHeight: `${TREE_ROW_HEIGHT}px` }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <input
+            type="text"
+            value={filterText}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setFolderFilters((prev) => {
+                const next = new Map(prev);
+                if (nextValue.trim()) {
+                  next.set(node.id, nextValue);
+                } else {
+                  next.delete(node.id);
+                }
+                return next;
+              });
+              setFolderVisibleCounts((prev) => {
+                const next = new Map(prev);
+                next.set(node.id, LARGE_FOLDER_PAGE_SIZE);
+                return next;
+              });
+            }}
+            placeholder={`Filter ${node.label}`}
+            className="h-7 min-w-[220px] flex-1 rounded-md border bg-background px-2 text-[12px] outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
+          />
+          <span className="shrink-0 text-[11px] text-muted-foreground">{showingSummary}</span>
+          {hasMore ? (
+            <button
+              type="button"
+              onClick={() =>
+                setFolderVisibleCounts((prev) => {
+                  const next = new Map(prev);
+                  next.set(node.id, visibleChildren + LARGE_FOLDER_PAGE_SIZE);
+                  return next;
+                })
+              }
+              className="shrink-0 rounded-md border px-2 py-1 text-[11px] transition-colors hover:bg-muted"
+            >
+              Load More
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  function renderNodeRow({ node, depth }: VisibleNodeRow) {
     const expanded = expandedNodeIds.has(node.id);
     const expandable = isExpandable(node);
     const nodePath = typeof node.metadata?.nodePath === "string" ? node.metadata.nodePath : node.id;
@@ -510,7 +1229,7 @@ export function DatabaseMetadataTree({
             isSelected && "bg-primary/10 text-primary hover:bg-primary/15",
             refreshable && "cursor-default",
           )}
-          style={{ paddingLeft: `${depth * 14 + 4}px` }}
+          style={{ paddingLeft: `${depth * 14 + 4}px`, minHeight: `${TREE_ROW_HEIGHT}px` }}
           onClick={(event) => handleNodeSelection(node, event)}
           onContextMenu={(event) => {
             event.preventDefault();
@@ -568,12 +1287,21 @@ export function DatabaseMetadataTree({
           )}
           {isRefreshing && <LoaderCircle className="ml-1 h-3.5 w-3.5 animate-spin text-muted-foreground" />}
         </div>
-        {expanded && node.children?.length ? (
-          <div>{node.children.map((child) => renderNode(child, depth + 1))}</div>
-        ) : null}
       </div>
     );
   }
+
+  function renderRow(row: VisibleTreeRow) {
+    if (row.kind === "folder-controls") {
+      return renderFolderControlsRow(row);
+    }
+    return renderNodeRow(row);
+  }
+
+  const contextRefreshTarget = contextMenu ? resolveRefreshTargetNode(contextMenu.node) : null;
+  const contextTableNode = contextMenu ? isTableNode(contextMenu.node) : false;
+  const contextSourceDdlNode = contextMenu ? isSourceDdlNode(contextMenu.node) : false;
+  const contextNodeDdlEnabled = contextTableNode || contextSourceDdlNode;
 
   return (
     <div className={cn("relative flex h-full min-h-0 flex-col", className)}>
@@ -635,8 +1363,16 @@ export function DatabaseMetadataTree({
           ) : null}
         </div>
       ) : canRenderTree ? (
-        <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
-          <div className="min-w-max">{renderNode(tree!, 0)}</div>
+        <div
+          ref={scrollContainerRef}
+          className="min-h-0 flex-1 overflow-auto px-2 py-2"
+          onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+        >
+          <div className="min-w-max">
+            {topSpacerHeight > 0 ? <div style={{ height: `${topSpacerHeight}px` }} /> : null}
+            {virtualRows.map((row) => renderRow(row))}
+            {bottomSpacerHeight > 0 ? <div style={{ height: `${bottomSpacerHeight}px` }} /> : null}
+          </div>
         </div>
       ) : (
         <div className="flex flex-1 items-center justify-center px-4 text-center text-xs text-muted-foreground">
@@ -651,37 +1387,215 @@ export function DatabaseMetadataTree({
         >
           <button
             type="button"
-            disabled={!REFRESHABLE_NODE_TYPES.has(contextMenu.node.type)}
-            onClick={() => void handleRefreshNode(contextMenu.node)}
+            disabled={!contextRefreshTarget && !contextNodeDdlEnabled}
+            onClick={() => {
+              if (contextNodeDdlEnabled) {
+                void handleNodeDdl(contextMenu.node, { forceRefresh: true });
+                return;
+              }
+              if (!contextRefreshTarget) {
+                return;
+              }
+              void handleRefreshNode(contextRefreshTarget);
+            }}
             className={cn(
               "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent",
-              !REFRESHABLE_NODE_TYPES.has(contextMenu.node.type) && "cursor-not-allowed opacity-50 hover:bg-transparent",
+              !contextRefreshTarget && !contextNodeDdlEnabled && "cursor-not-allowed opacity-50 hover:bg-transparent",
             )}
           >
             <RefreshCw className="h-4 w-4" />
             <span>Refresh</span>
           </button>
-          <button
-            type="button"
-            onClick={() => void handleCopy(contextMenu.node.label, "name")}
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
-          >
-            <span>Copy Name</span>
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              void handleCopy(
-                formatNodePathsForCopy(resolveNodesForCopy(contextMenu.node), sqlclConnectionName, displayName),
-                selectedNodeIds.has(contextMenu.node.id) && selectedNodes.length > 1 ? "node paths" : "node path",
-              )
-            }
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
-          >
-            <span>
-              {selectedNodeIds.has(contextMenu.node.id) && selectedNodes.length > 1 ? "Copy Node Paths" : "Copy Node Path"}
-            </span>
-          </button>
+          {contextNodeDdlEnabled ? (
+            <button
+              type="button"
+              onClick={() => void handleViewNodeDdl(contextMenu.node)}
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+            >
+              <Eye className="h-4 w-4" />
+              <span>VIEW</span>
+            </button>
+          ) : null}
+          {contextNodeDdlEnabled ? (
+            <button
+              type="button"
+              onClick={() => void handleNodeDdl(contextMenu.node, { insertPrompt: true })}
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+            >
+              <FileCode className="h-4 w-4" />
+              <span>Quick DDL</span>
+            </button>
+          ) : null}
+          {isSqlCopyNode(contextMenu.node) ? (
+            <button
+              type="button"
+              onClick={() =>
+                void handleCopy(formatDiagnosisSqlForCopy(contextMenu.node, sqlclConnectionName), "sql", {
+                  addAsSnippet: contextMenu.node.type === "useful_diagnosis",
+                })
+              }
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+            >
+              <span>Copy SQL</span>
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() =>
+                  void handleCopy(
+                    formatNodeNamePromptForCopy(contextMenu.node, sqlclConnectionName, displayName),
+                    "name prompt",
+                    { addAsSnippet: true },
+                  )
+                }
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+              >
+                <span>Copy Name</span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  void handleCopy(
+                    formatNodePathsForCopy(resolveNodesForCopy(contextMenu.node), sqlclConnectionName, displayName),
+                    selectedNodeIds.has(contextMenu.node.id) && selectedNodes.length > 1 ? "node paths" : "node path",
+                    { addAsSnippet: true },
+                  )
+                }
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+              >
+                <span>
+                  {selectedNodeIds.has(contextMenu.node.id) && selectedNodes.length > 1 ? "Copy Node Paths" : "Copy Node Path"}
+                </span>
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
+
+      <Dialog
+        open={Boolean(objectViewDialog)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setObjectViewDialog(null);
+            sourceSelectionTextRef.current = "";
+            setSelectedSourceText("");
+            setHasInsertedSelectionContext(false);
+          }
+        }}
+      >
+        <DialogContent className="flex h-[88vh] w-[92vw] max-w-[1200px] flex-col gap-0 overflow-hidden rounded-2xl p-0">
+          <div className="border-b px-5 py-3 pr-16">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-sm font-semibold">
+                  {objectViewDialog ? `${objectViewDialog.node.label} Source / DDL` : "Object Source / DDL"}
+                </DialogTitle>
+                {objectViewDialog ? (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {getRelativeNodePath(objectViewDialog.node, displayName)}
+                  </div>
+                ) : null}
+              </div>
+              {objectViewDialog ? (
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddSelectedCodeToPrompt}
+                    disabled={!selectedSourceText.trim()}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors hover:bg-muted",
+                      !selectedSourceText.trim() && "cursor-not-allowed opacity-50 hover:bg-transparent",
+                    )}
+                  >
+                    <FileCode className="h-3.5 w-3.5" />
+                    <span>{t("chat.addSelectionToPrompt")}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopy(objectViewDialog.sqlText, "sql")}
+                    className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors hover:bg-muted"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    <span>Copy SQL</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleRefreshViewDialog()}
+                    disabled={loadingNodeIds.has(objectViewDialog.node.id)}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors hover:bg-muted",
+                      loadingNodeIds.has(objectViewDialog.node.id) && "cursor-not-allowed opacity-60 hover:bg-transparent",
+                    )}
+                  >
+                    {loadingNodeIds.has(objectViewDialog.node.id) ? (
+                      <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    )}
+                    <span>Refresh</span>
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto px-5 py-4">
+            {objectViewDialog ? (
+              <div
+                ref={sourceSelectionContainerRef}
+                className="overflow-hidden rounded-lg border bg-muted/20"
+                onMouseUp={updateSourceSelectionText}
+                onKeyUp={updateSourceSelectionText}
+              >
+                <div className="max-h-full overflow-auto">
+                  <div className="min-w-max font-mono text-xs leading-6">
+                    {normalizeCodeLines(objectViewDialog.sqlText).map((line, index) => (
+                      <div
+                        key={`${objectViewDialog.node.id}-${index + 1}`}
+                        className="grid grid-cols-[auto,1fr] border-b border-border/40 last:border-b-0"
+                      >
+                        <div className="select-none border-r bg-muted/40 px-3 py-0.5 text-right text-muted-foreground">
+                          {index + 1}
+                        </div>
+                        <pre className="overflow-x-visible px-3 py-0.5 whitespace-pre-wrap break-words text-foreground">
+                          {line || " "}
+                        </pre>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {manualCopyState ? (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 px-4 backdrop-blur-sm">
+          <div className="flex w-full max-w-2xl flex-col gap-3 rounded-lg border bg-background p-4 shadow-lg">
+            <div>
+              <div className="text-sm font-semibold">Manual Copy</div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Automatic clipboard access is unavailable in this browser. Copy the {manualCopyState.label} manually.
+              </p>
+            </div>
+            <textarea
+              ref={manualCopyTextareaRef}
+              readOnly
+              value={manualCopyState.text}
+              className="min-h-40 w-full rounded-md border bg-background px-3 py-2 font-mono text-xs outline-none"
+            />
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">Text is selected automatically. Press Ctrl+C to copy.</span>
+              <button
+                type="button"
+                onClick={() => setManualCopyState(null)}
+                className="rounded-md border px-3 py-1.5 text-xs transition-colors hover:bg-muted"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>

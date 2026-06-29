@@ -11,9 +11,11 @@ import { useDeleteSession } from "../hooks/useSessions";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { nanoid } from "nanoid";
 import { Button } from "../components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { ArrowLeft, ChevronDown, ChevronUp, MessageSquare, Plus, Search, Trash2, X } from "lucide-react";
 import { cn, formatDate } from "../lib/utils";
+import type { MetadataTreeNode, OpenDatabaseMetadataResponse } from "../types/databaseMetadata";
 
 import { CHANNEL_ICONS } from "../lib/channelIcons";
 
@@ -50,6 +52,55 @@ function getDatabaseStatusTone(status?: string): string {
   }
 }
 
+function createWebSessionKey(userId?: string | null): string {
+  const hexId = Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) =>
+    b.toString(16).padStart(2, "0")
+  ).join("");
+  return `web:${userId}:${hexId}`;
+}
+
+function findFirstNodeByType(node: MetadataTreeNode, nodeType: string): MetadataTreeNode | null {
+  if (node.type === nodeType) {
+    return node;
+  }
+  for (const child of node.children ?? []) {
+    const match = findFirstNodeByType(child, nodeType);
+    if (match) {
+      return match;
+    }
+  }
+  return null;
+}
+
+function resolveConnectedSchemaName(tree: MetadataTreeNode): string | null {
+  const connectedSchemaNode = findFirstNodeByType(tree, "connected_schema");
+  const connectedSchema =
+    typeof connectedSchemaNode?.metadata?.schemaName === "string"
+      ? connectedSchemaNode.metadata.schemaName.trim()
+      : "";
+  if (connectedSchema) {
+    return connectedSchema.toUpperCase();
+  }
+  const schemaNode = findFirstNodeByType(tree, "schema");
+  const schemaName =
+    typeof schemaNode?.metadata?.schemaName === "string"
+      ? schemaNode.metadata.schemaName.trim()
+      : schemaNode?.label?.trim() ?? "";
+  return schemaName ? schemaName.toUpperCase() : null;
+}
+
+function buildSchemaDevelopmentPrompt(schemaName: string, connectionName: string): string {
+  return [
+    `Please use oracle sqlcl MCP tool to connect to database ${connectionName}. This message initializes the development context for the current schema.`,
+    `Current target path: /Schemas/${schemaName}.`,
+    `Before starting any implementation work, first read the local metadata and code cache for schema ${schemaName} in the workspace when available. Prioritize the metadata tree, cached DDL, and cached source files for understanding the current schema context.`,
+    `${schemaName} schema is accessible via the SQLcl MCP tool using connection ${connectionName}. Read the ora-ops-metadata skill for more information.`,
+    "Use SQLcl MCP only when local cache is missing, insufficient, stale, or when you need to validate live database state.",
+    `For follow-up requests, unless another schema or object is specified, treat /Schemas/${schemaName} as the default working scope.`,
+    `If later work requires object changes, update the relevant local files first, then compile or validate affected objects and report any errors clearly.`,
+  ].join("\n\n");
+}
+
 export default function Chat() {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
@@ -57,8 +108,11 @@ export default function Chat() {
   // On mobile: track whether the user is viewing the chat window (true) or session list (false)
   const mobileShowChat = useChatStore((s) => s.mobileShowChat);
   const setMobileShowChat = useChatStore((s) => s.setMobileShowChat);
-  const { currentSessionKey, setCurrentSession, setMessages, insertDraftMessage } = useChatStore();
+  const { currentSessionKey, setCurrentSession, setMessages, addDraftSnippet, requestDraftAutoSend } = useChatStore();
   const sessionStates = useChatStore((s) => s.sessionStates);
+  const clearDraftSnippets = useChatStore((s) => s.clearDraftSnippets);
+  const setDraftMessage = useChatStore((s) => s.setDraftMessage);
+  const setDraftSelection = useChatStore((s) => s.setDraftSelection);
   const { data: sessions } = useSessions();
   const { data: sessionMsgs, isSuccess: historyLoaded } = useSessionMessages(currentSessionKey ?? "");
   const { data: hostInventory } = useHostInventory({ refetchInterval: 30000 });
@@ -139,7 +193,11 @@ export default function Chat() {
     sqlclConnectionName: string;
     displayName: string;
     databaseStatus: string;
+    openNonce: number;
+    autoDevPrompt: boolean;
   } | null>(null);
+  const openNonceRef = useRef(0);
+  const handledAutoPromptNonceRef = useRef<number | null>(null);
   // Admins see all sessions; regular users see only their own web sessions
   const mySessions = useMemo(
     () =>
@@ -193,10 +251,7 @@ export default function Chat() {
   const inventoryPanelExpanded = expandedInventoryPanel !== null;
 
   const newChat = () => {
-    const hexId = Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) =>
-      b.toString(16).padStart(2, "0")
-    ).join("");
-    const key = `web:${user?.id}:${hexId}`;
+    const key = createWebSessionKey(user?.id);
     loadedKeyRef.current = key; // mark as loaded with 0 messages so effect skips empty session
     loadedCountRef.current = 0;
     setCurrentSession(key);
@@ -210,7 +265,7 @@ export default function Chat() {
   };
 
   const handleHostPromptInsert = (hostName: string) => {
-    insertDraftMessage(`Please connect to server ${hostName},`);
+    addDraftSnippet(`Please connect to server ${hostName},`);
     if (isMobile) {
       setMobileShowChat(true);
     }
@@ -239,13 +294,16 @@ export default function Chat() {
       normalizedStatus === "INVALID"
         ? `Please conect to server ${hostName ?? ""}, check  status of database_name ${databaseName ?? connectionName} , if it is down , startup database and listener.`
         : `Please use oracle sqlcl MCP tool to connect to database ${connectionName},`;
-    insertDraftMessage(prompt);
+    addDraftSnippet(prompt);
     if (isMobile) {
       setMobileShowChat(true);
     }
   };
 
-  const openDatabaseDrawer = (database?: { sqlcl_saveconnname?: string; database_name?: string; database_status?: string }) => {
+  const openDatabaseDrawer = (
+    database?: { sqlcl_saveconnname?: string; database_name?: string; database_status?: string },
+    options?: { autoDevPrompt?: boolean },
+  ) => {
     const connectionName = database?.sqlcl_saveconnname?.trim();
     if (!connectionName) {
       toast.error("This database entry has no SQLcl saved connection name.");
@@ -255,14 +313,50 @@ export default function Chat() {
     const displayName = database?.database_name
       ? `${database.database_name} - ${connectionName}`
       : connectionName;
+    const nextOpenNonce = ++openNonceRef.current;
     setActiveDatabaseMetadataTarget({
       connectionId,
       sqlclConnectionName: connectionName,
       displayName,
       databaseStatus: database?.database_status ?? "UNKNOWN",
+      openNonce: nextOpenNonce,
+      autoDevPrompt: options?.autoDevPrompt ?? false,
     });
-    if (!isMobile) {
-      setIsDatabaseDrawerOpen(true);
+    setIsDatabaseDrawerOpen(true);
+  };
+
+  const handleDatabaseTreeOpenSuccess = (response: OpenDatabaseMetadataResponse) => {
+    const target = activeDatabaseMetadataTarget;
+    if (!target || response.connectionId !== target.connectionId) {
+      return;
+    }
+    if (!target.autoDevPrompt) {
+      return;
+    }
+    if (handledAutoPromptNonceRef.current === target.openNonce) {
+      return;
+    }
+
+    const schemaName = resolveConnectedSchemaName(response.tree);
+    if (!schemaName) {
+      toast.error("Connected schema was not found in the metadata tree.");
+      return;
+    }
+
+    handledAutoPromptNonceRef.current = target.openNonce;
+    const sessionKey = currentSessionKey ?? createWebSessionKey(user?.id);
+    if (!currentSessionKey) {
+      loadedKeyRef.current = sessionKey;
+      loadedCountRef.current = 0;
+      setCurrentSession(sessionKey);
+    }
+    setDraftMessage("", sessionKey);
+    setDraftSelection(0, 0, sessionKey);
+    clearDraftSnippets(sessionKey);
+    addDraftSnippet(buildSchemaDevelopmentPrompt(schemaName, target.sqlclConnectionName), sessionKey);
+    requestDraftAutoSend(sessionKey);
+    if (isMobile) {
+      setMobileShowChat(true);
     }
   };
 
@@ -490,11 +584,21 @@ export default function Chat() {
                                 type="button"
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  openDatabaseDrawer(database);
+                                  openDatabaseDrawer(database, { autoDevPrompt: false });
                                 }}
                                 className="rounded-md border border-primary/20 bg-primary/5 px-2 py-0.5 text-[10px] font-semibold text-primary transition-colors hover:border-primary/35 hover:bg-primary/10"
                               >
                                 {t("chat.openDatabasePanel")}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openDatabaseDrawer(database, { autoDevPrompt: true });
+                                }}
+                                className="rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700 transition-colors hover:border-sky-300 hover:bg-sky-100 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-300 dark:hover:bg-sky-950/45"
+                              >
+                                {t("chat.openDatabaseDevPanel")}
                               </button>
                               <span
                                 className={cn(
@@ -602,14 +706,36 @@ export default function Chat() {
                                       {database.database_version || "-"}
                                     </div>
                                   </div>
-                                  <span
-                                    className={cn(
-                                      "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                                      getDatabaseStatusTone(database.database_status),
-                                    )}
-                                  >
-                                    {database.database_status ?? "UNKNOWN"}
-                                  </span>
+                                  <div className="flex shrink-0 items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        openDatabaseDrawer(database, { autoDevPrompt: false });
+                                      }}
+                                      className="rounded-md border border-primary/20 bg-primary/5 px-2 py-0.5 text-[10px] font-semibold text-primary transition-colors hover:border-primary/35 hover:bg-primary/10"
+                                    >
+                                      {t("chat.openDatabasePanel")}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        openDatabaseDrawer(database, { autoDevPrompt: true });
+                                      }}
+                                      className="rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700 transition-colors hover:border-sky-300 hover:bg-sky-100 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-300 dark:hover:bg-sky-950/45"
+                                    >
+                                      {t("chat.openDatabaseDevPanel")}
+                                    </button>
+                                    <span
+                                      className={cn(
+                                        "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                                        getDatabaseStatusTone(database.database_status),
+                                      )}
+                                    >
+                                      {database.database_status ?? "UNKNOWN"}
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
                             ))}
@@ -663,11 +789,34 @@ export default function Chat() {
                 sqlclConnectionName={activeDatabaseMetadataTarget?.sqlclConnectionName ?? null}
                 displayName={activeDatabaseMetadataTarget?.displayName ?? null}
                 databaseStatus={activeDatabaseMetadataTarget?.databaseStatus ?? null}
+                openNonce={activeDatabaseMetadataTarget?.openNonce ?? 0}
+                onOpenSuccess={handleDatabaseTreeOpenSuccess}
                 className="h-full"
               />
             </div>
           </div>
         </aside>
+      )}
+
+      {isMobile && (
+        <Dialog open={isDatabaseDrawerOpen} onOpenChange={setIsDatabaseDrawerOpen}>
+          <DialogContent className="flex h-[85vh] w-[calc(100vw-1.5rem)] max-w-none flex-col gap-0 overflow-hidden rounded-2xl p-0">
+            <div className="border-b px-4 py-3">
+              <DialogTitle className="text-sm font-semibold">{t("chat.databasePanelTitle")}</DialogTitle>
+            </div>
+            <div className="min-h-0 flex-1">
+              <DatabaseMetadataTree
+                connectionId={activeDatabaseMetadataTarget?.connectionId ?? null}
+                sqlclConnectionName={activeDatabaseMetadataTarget?.sqlclConnectionName ?? null}
+                displayName={activeDatabaseMetadataTarget?.displayName ?? null}
+                databaseStatus={activeDatabaseMetadataTarget?.databaseStatus ?? null}
+                openNonce={activeDatabaseMetadataTarget?.openNonce ?? 0}
+                onOpenSuccess={handleDatabaseTreeOpenSuccess}
+                className="h-full"
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Chat area — desktop: always visible; mobile: shown when in chat */}

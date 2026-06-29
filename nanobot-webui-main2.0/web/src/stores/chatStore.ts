@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { nanoid } from "nanoid";
 
 export interface ChatMessage {
   id: string;
@@ -32,6 +33,12 @@ interface DraftSelection {
   end: number;
 }
 
+export interface DraftSnippet {
+  id: string;
+  text: string;
+  sourceType: "node_path";
+}
+
 interface ChatState {
   currentSessionKey: string | null;
   messages: ChatMessage[];
@@ -39,6 +46,8 @@ interface ChatState {
   mobileShowChat: boolean;
   draftMessages: Record<string, string>;
   draftSelections: Record<string, DraftSelection>;
+  draftSnippets: Record<string, DraftSnippet[]>;
+  draftAutoSendTokens: Record<string, number>;
 
   /** Per-session waiting / progress state — keyed by session key. */
   sessionStates: Record<string, SessionState>;
@@ -51,6 +60,12 @@ interface ChatState {
   setDraftMessage: (value: string, sessionKey?: string) => void;
   setDraftSelection: (start: number, end?: number, sessionKey?: string) => void;
   insertDraftMessage: (value: string, sessionKey?: string) => void;
+  addDraftSnippet: (text: string, sessionKey?: string) => void;
+  requestDraftAutoSend: (sessionKey?: string) => void;
+  clearDraftAutoSend: (sessionKey?: string) => void;
+  updateDraftSnippet: (snippetId: string, text: string, sessionKey?: string) => void;
+  removeDraftSnippet: (snippetId: string, sessionKey?: string) => void;
+  clearDraftSnippets: (sessionKey?: string) => void;
   setCurrentSession: (key: string | null) => void;
   addMessage: (msg: ChatMessage) => void;
   appendAssistantText: (id: string, text: string) => void;
@@ -77,6 +92,8 @@ export const useChatStore = create<ChatState>()(
       mobileShowChat: false,
       draftMessages: {},
       draftSelections: {},
+      draftSnippets: {},
+      draftAutoSendTokens: {},
       sessionStates: {},
 
       // Derived from sessionStates[currentSessionKey]
@@ -141,6 +158,98 @@ export const useChatStore = create<ChatState>()(
             draftSelections: {
               ...state.draftSelections,
               [key]: { start: cursor, end: cursor },
+            },
+          };
+        }),
+
+      addDraftSnippet: (text, sessionKey?) =>
+        set((state) => {
+          const key = sessionKey ?? state.currentSessionKey ?? "";
+          const normalized = text.trim();
+          if (!key || !normalized) {
+            return state;
+          }
+          const current = state.draftSnippets[key] ?? [];
+          return {
+            draftSnippets: {
+              ...state.draftSnippets,
+              [key]: [...current, { id: nanoid(), text: normalized, sourceType: "node_path" }],
+            },
+          };
+        }),
+
+      requestDraftAutoSend: (sessionKey?) =>
+        set((state) => {
+          const key = sessionKey ?? state.currentSessionKey ?? "";
+          if (!key) {
+            return state;
+          }
+          return {
+            draftAutoSendTokens: {
+              ...state.draftAutoSendTokens,
+              [key]: (state.draftAutoSendTokens[key] ?? 0) + 1,
+            },
+          };
+        }),
+
+      clearDraftAutoSend: (sessionKey?) =>
+        set((state) => {
+          const key = sessionKey ?? state.currentSessionKey ?? "";
+          if (!key) {
+            return state;
+          }
+          return {
+            draftAutoSendTokens: {
+              ...state.draftAutoSendTokens,
+              [key]: 0,
+            },
+          };
+        }),
+
+      updateDraftSnippet: (snippetId, text, sessionKey?) =>
+        set((state) => {
+          const key = sessionKey ?? state.currentSessionKey ?? "";
+          if (!key) {
+            return state;
+          }
+          const current = state.draftSnippets[key] ?? [];
+          const normalized = text;
+          const next = current
+            .map((snippet) => (snippet.id === snippetId ? { ...snippet, text: normalized } : snippet))
+            .filter((snippet) => snippet.text.length > 0);
+          return {
+            draftSnippets: {
+              ...state.draftSnippets,
+              [key]: next,
+            },
+          };
+        }),
+
+      removeDraftSnippet: (snippetId, sessionKey?) =>
+        set((state) => {
+          const key = sessionKey ?? state.currentSessionKey ?? "";
+          if (!key) {
+            return state;
+          }
+          const current = state.draftSnippets[key] ?? [];
+          return {
+            draftSnippets: {
+              ...state.draftSnippets,
+              [key]: current.filter((snippet) => snippet.id !== snippetId),
+            },
+          };
+        }),
+
+      clearDraftSnippets: (sessionKey?) =>
+        set((state) => {
+          const key = sessionKey ?? state.currentSessionKey ?? "";
+          if (!key) {
+            return state;
+          }
+          return {
+            draftSnippets: {
+              ...state.draftSnippets,
+              [key]: [],
             },
           };
         }),

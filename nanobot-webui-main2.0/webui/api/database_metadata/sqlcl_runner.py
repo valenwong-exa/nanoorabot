@@ -8,8 +8,11 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
+
+from loguru import logger
 
 from .metadata_sql import validate_sqlcl_connection_name
 
@@ -72,7 +75,13 @@ def _decode_process_output(raw: bytes | str | None) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
-def run_sqlcl(sqlcl_connection_name: str, sql_text: str, *, timeout: int = 60) -> str:
+def run_sqlcl(
+    sqlcl_connection_name: str,
+    sql_text: str,
+    *,
+    timeout: int = 60,
+    operation: str = "sqlcl",
+) -> str:
     """Run SQL against a SQLcl saved connection and return stdout."""
     connection_name = validate_sqlcl_connection_name(sqlcl_connection_name)
     sql_executable = _resolve_sqlcl_executable()
@@ -80,6 +89,14 @@ def run_sqlcl(sqlcl_connection_name: str, sql_text: str, *, timeout: int = 60) -
         raise RuntimeError("SQLcl executable 'sql' was not found in PATH")
 
     command = _build_sqlcl_command(sql_executable, connection_name)
+    started_at = time.perf_counter()
+    logger.info(
+        "SQLcl start: operation={} connection={} timeout={}s executable={}",
+        operation,
+        connection_name,
+        timeout,
+        command[0],
+    )
     try:
         completed = subprocess.run(
             command,
@@ -88,19 +105,61 @@ def run_sqlcl(sqlcl_connection_name: str, sql_text: str, *, timeout: int = 60) -
             timeout=timeout,
             check=False,
         )
+    except subprocess.TimeoutExpired as exc:
+        elapsed_ms = (time.perf_counter() - started_at) * 1000
+        logger.warning(
+            "SQLcl timeout: operation={} connection={} elapsed_ms={:.1f} timeout={}s",
+            operation,
+            connection_name,
+            elapsed_ms,
+            timeout,
+        )
+        raise RuntimeError(f"SQLcl timed out after {timeout} seconds") from exc
     except OSError as exc:
+        elapsed_ms = (time.perf_counter() - started_at) * 1000
+        logger.exception(
+            "SQLcl start failed: operation={} connection={} elapsed_ms={:.1f}",
+            operation,
+            connection_name,
+            elapsed_ms,
+        )
         raise RuntimeError(f"Failed to start SQLcl executable '{sql_executable}': {exc}") from exc
     stdout = _decode_process_output(completed.stdout)
     stderr = _decode_process_output(completed.stderr)
     if completed.returncode != 0 or _contains_sqlcl_error(stdout, stderr):
         detail = stderr.strip() or stdout.strip() or f"SQLcl exited with code {completed.returncode}"
+        elapsed_ms = (time.perf_counter() - started_at) * 1000
+        logger.warning(
+            "SQLcl failed: operation={} connection={} elapsed_ms={:.1f} exit_code={} stdout_chars={} stderr_chars={}",
+            operation,
+            connection_name,
+            elapsed_ms,
+            completed.returncode,
+            len(stdout),
+            len(stderr),
+        )
         raise RuntimeError(detail)
+    elapsed_ms = (time.perf_counter() - started_at) * 1000
+    logger.info(
+        "SQLcl success: operation={} connection={} elapsed_ms={:.1f} stdout_chars={} stderr_chars={}",
+        operation,
+        connection_name,
+        elapsed_ms,
+        len(stdout),
+        len(stderr),
+    )
     return stdout
 
 
-def run_sqlcl_json(sqlcl_connection_name: str, sql_text: str, *, timeout: int = 60) -> Any:
+def run_sqlcl_json(
+    sqlcl_connection_name: str,
+    sql_text: str,
+    *,
+    timeout: int = 60,
+    operation: str = "sqlcl_json",
+) -> Any:
     """Run SQLcl and parse the first JSON object/array in its output."""
-    output = run_sqlcl(sqlcl_connection_name, sql_text, timeout=timeout)
+    output = run_sqlcl(sqlcl_connection_name, sql_text, timeout=timeout, operation=operation)
     return extract_json_payload(output)
 
 

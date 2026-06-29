@@ -1,0 +1,11 @@
+{
+  "driver": "python-oracledb",
+  "user": "valen",
+  "password": "oracle",
+  "host": "192.168.56.101",
+  "port": 1521,
+  "service_name": "aidemo_pdb",
+  "dsn": "192.168.56.101:1521/aidemo_pdb",
+  "connect_string": "valen/oracle@192.168.56.101:1521/aidemo_pdb",
+  "updated_at": "2026-05-06T09:22:13+00:00"
+}

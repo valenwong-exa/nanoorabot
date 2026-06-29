@@ -1,346 +1,227 @@
-防御页面开发说明
+Defense 页面开发说明
+======================
 
-1. 页面目标
+一、背景
+--------
+本次开发的目标，是让 WebUI 可以维护危险命令策略文件
+`dangerous_tool_policy.json`，并让该策略在 agent 的 tool 执行前真正生效。
 
-新增“防御”页面，用于展示危险命令策略管理的 UI 原型。
-该页面当前定位为纯 demo 页面，不接真实防护引擎，不做规则持久化，不执行任何拦截逻辑。
+核心目标分为两部分：
 
-页面目的主要是：
+1. 在 WebUI 页面上维护危险命令策略
+2. 在后端执行 tool call 之前，根据策略做 block 或 warn
 
-- 预演危险命令策略管理界面
-- 演示未来 AI 命令审查/阻断的产品形态
-- 给后续真正的策略引擎实现提供视觉和交互草图
 
+二、本次实现内容
+----------------
 
-2. 当前定位
+1. Defense 页面从静态演示页，改为真实可维护策略文件的页面
+   - 页面现在会通过后端 API 读取 `dangerous_tool_policy.json`
+   - 支持新增、编辑、删除规则
+   - 支持保存回 JSON 文件
 
-当前防御页面是静态 UI 页面，仅用于展示，不具备以下能力：
+2. 新增启动参数 `--tool-policy`
+   - WebUI 启动时可通过该参数传入策略文件路径
+   - 例如：
+     `--tool-policy E:\nanobot-main\nanobot-webui-main2.0\runtime\dangerous_tool_policy.json`
 
-- 不会真正拦截命令
-- 不会真正写入规则
-- 不会调用后端接口保存
-- 不会影响当前 AI 执行行为
+3. 新增后端策略读写服务
+   - WebUI 后端增加了 tool policy 的服务和 API
+   - 页面保存后会直接写回 JSON 文件
 
-换句话说，目前它只是一个“策略管理页面的演示稿”。
+4. 危险命令策略支持两种匹配方式
+   - `literal`
+   - `regex`
 
+5. 危险命令策略真正接入 agent tool 执行链路
+   - 在 tool 真正执行前拦截
+   - `mode=block` 时直接拒绝执行
+   - `mode=warn` 时暂停执行，等待用户授权
 
-3. 页面主要场景
+6. 用户提示信息统一改为英文
+   - 包括 block、warn、等待授权、取消执行等提示
 
-页面假设未来 AI 在执行命令前，需要根据危险命令策略做处理，例如：
 
-- 提示
-- 人工确认
-- 直接阻止
+三、dangerous_tool_policy.json 结构
+-----------------------------------
 
-主要关注对象包括：
+当前每条规则主要字段如下：
 
-3.1 Oracle 数据库维护相关命令
+- `command`
+  - 规则内容
+  - 当 `matchType=literal` 时，表示普通关键字
+  - 当 `matchType=regex` 时，表示 Python `re` 正则表达式
 
-- truncate table
-- drop table
-- delete from
-- update ... without where
+- `matchType`
+  - `literal` 或 `regex`
 
-3.2 Linux / 文件系统相关命令
+- `regexFlags`
+  - 当前支持：
+    - `i`：忽略大小写
+    - `m`：多行模式
+    - `s`：dot 匹配换行
 
-- rm -rf
-- shutdown -h now
-- reboot
+- `category`
+  - 规则分类，例如 `oracle`、`filesystem`、`linux`
 
+- `severity`
+  - 风险级别，例如 `high`、`critical`
 
-4. 页面实现文件
+- `mode`
+  - 处理方式：
+    - `block`
+    - `warn`
 
-页面主文件：
+- `scope`
+  - 规则作用范围，例如 `SQL`、`Shell`
 
-E:\nanobot-main\nanobot-webui-main\web\src\pages\Defense.tsx
+- `note`
+  - 规则说明
 
-该页面最初是空白占位页，现已改造成静态策略管理 dashboard。
 
+四、literal 与 regex 的区别
+----------------------------
 
-5. 数据来源方式
+1. `literal`
+   - 适合简单关键字匹配，例如：
+     - `drop table`
+     - `delete from`
+     - `rm -rf`
+   - 当前后端会自动做：
+     - 大小写不敏感匹配
+     - 多个连续空格压缩
+   - 所以：
+     - `drop table`
+     - `DROP TABLE`
+     - `drop     table`
+     都可以识别
 
-当前防御页面不走后端接口，不读取数据库，也不读取配置文件。
-页面中的规则全部是前端静态数组写死，用于 UI 设计展示。
+2. `regex`
+   - 适合复杂规则
+   - 当前按 Python `re` 语法处理
+   - 例如检测“update 但没有 where”的规则：
 
-当前静态规则定义在：
+     `\bupdate\b[\s\S]*?\bset\b(?:(?!\bwhere\b)[\s\S])*$`
 
-Defense.tsx
+   - 在 JSON 中需要写成转义后的形式：
 
-内部的：
+     `\\bupdate\\b[\\s\\S]*?\\bset\\b(?:(?!\\bwhere\\b)[\\s\\S])*$`
 
-RULES
 
-数组中。
+五、Defense 页面支持的能力
+--------------------------
 
+当前页面支持：
 
-6. 当前静态规则结构
+1. 查看当前策略文件路径和更新时间
+2. 查看规则列表
+3. 搜索规则
+4. 编辑规则字段
+5. 选择匹配方式 `literal / regex`
+6. 编辑 `regexFlags`
+7. 保存策略到 JSON 文件
+8. 页面上查看 regex 使用说明
 
-当前每条规则包含以下字段：
 
-- command
-- category
-- severity
-- mode
-- scope
-- note
+六、后端执行拦截逻辑
+--------------------
 
-字段说明：
+危险命令策略不仅用于页面展示，还已经真正接入 agent 的 tool 执行流程。
 
-6.1 command
+逻辑如下：
 
-危险命令内容，例如：
+1. 当模型生成 tool call 后
+2. 在 tool 真正执行之前，系统会读取策略
+3. 如果命中规则：
+   - `block`
+     - 直接拒绝执行
+     - 返回英文提示，说明该 tool call 已被拦截
+   - `warn`
+     - 暂停执行
+     - 记录待授权状态
+     - 等待用户明确回复批准或取消
 
-- truncate table
-- rm -rf
+当前授权文本支持中英双语，例如：
 
-6.2 category
+- 批准：
+  - `approve`
+  - `同意执行`
+  - `批准执行`
 
-命令分类，目前分为：
+- 拒绝：
+  - `cancel`
+  - `拒绝`
+  - `取消`
 
-- oracle
-- linux
-- filesystem
 
-6.3 severity
+七、本次涉及的主要文件
+----------------------
 
-风险等级，目前分为：
+前端页面：
+- `web/src/pages/Defense.tsx`
+- `web/src/hooks/useToolPolicy.ts`
 
-- high
-- critical
+后端 WebUI：
+- `webui/tool_policy.py`
+- `webui/api/routes/tool_policy.py`
+- `webui/api/models.py`
+- `webui/__main__.py`
+- `webui/cli.py`
+- `start_webui_dba1.bat`
 
-6.4 mode
+Agent 执行侧：
+- `nanobot/agent/tool_policy.py`
+- `nanobot/agent/runner.py`
+- `nanobot/agent/loop.py`
 
-处理方式，目前分为：
+策略文件：
+- `runtime/dangerous_tool_policy.json`
 
-- warn
-- block
+测试：
+- `tests/agent/test_tool_policy_guard.py`
 
-6.5 scope
 
-规则适用范围，例如：
+八、当前默认策略示例
+--------------------
 
-- SQL
-- Shell
+当前默认策略中，已经包含如下典型规则：
 
-6.6 note
+- `drop table` -> `block`
+- `truncate table` -> `block`
+- `delete from` -> `warn`
+- `update without where` -> 使用 regex，`warn`
+- `rm -rf` -> `block`
+- `shutdown -h now` -> `block`
+- `reboot` -> `warn`
 
-备注说明，用于提示该命令为什么危险。
 
+九、后续可继续增强的方向
+------------------------
 
-7. 页面结构设计
+1. 在 Defense 页面增加“规则测试”功能
+   - 输入一段命令
+   - 直接显示命中哪条规则
 
-整体风格与系统现有页面保持一致，采用：
+2. 增加安全事件审计
+   - 对 block / warn 命中的记录单独写日志或写数据库
 
-- 顶部统计卡片
-- 中部说明 banner
-- 搜索过滤输入框
-- 下方规则表格
+3. 增加更细粒度的 tool 范围控制
+   - 例如不同规则只作用于某些 tool
 
-保证视觉上与 Dashboard、Host、Audit 等页面风格统一。
+4. 增加更友好的 WebUI 审批按钮
+   - 代替用户手工输入 `approve` / `cancel`
 
 
-8. 顶部摘要卡片
+十、结论
+--------
 
-当前顶部设计了 3 个摘要卡片：
+本次开发已经完成两件关键事情：
 
-- 规则总数
-- 阻止规则
-- 提示规则
+1. `Defense` 页面可以真实维护 `dangerous_tool_policy.json`
+2. 策略已经真正进入 agent 的 tool 执行链路，可以对危险命令做 block 或 warn
 
-作用：
+这意味着：
 
-- 提升 dashboard 感
-- 快速展示策略概况
-- 让用户对规则规模和分布有第一眼认知
+- 页面维护的规则，不再只是展示
+- 修改 JSON 后，可以真正影响危险命令的执行行为
 
-
-9. 中部说明区域
-
-页面中间设计了一条 banner，明确说明：
-
-- 当前是静态 demo
-- 主要针对 Oracle 和 Linux 危险命令
-- 不会实际执行防御逻辑
-
-这样可避免用户误以为系统已经具备真正的命令阻断能力。
-
-
-10. 关键字过滤
-
-页面中增加了一个过滤输入框。
-
-当前支持按以下字段进行静态过滤：
-
-- command
-- category
-- severity
-- mode
-- scope
-- note
-
-说明：
-
-- 这是纯前端过滤
-- 不涉及后端检索
-- 用于 demo 页面提升可用性和交互感
-
-
-11. 规则表格设计
-
-表格列包括：
-
-- 危险命令
-- 分类
-- 等级
-- 处理方式
-- 适用范围
-- 备注
-- 操作
-
-其中“操作”列当前放了静态按钮：
-
-- 修改
-- 删除
-
-页面右上角还放了：
-
-- 新增规则
-- 编辑策略
-
-这些按钮目前都是静态展示，不绑定真实逻辑。
-
-
-12. 风险视觉设计
-
-页面对不同信息做了颜色区分，增强可读性：
-
-12.1 分类
-
-- Oracle
-- Linux
-- 文件系统
-
-分别使用不同 badge 风格。
-
-12.2 风险等级
-
-- high
-- critical
-
-critical 的风险更高，颜色更强烈。
-
-12.3 处理方式
-
-- warn
-- block
-
-其中 block 以更醒目的方式展示，强调阻止含义。
-
-
-13. 当前静态规则内容
-
-当前已内置的 demo 规则包括：
-
-- truncate table
-- drop table
-- delete from
-- update ... without where
-- rm -rf
-- shutdown -h now
-- reboot
-
-这些命令主要覆盖：
-
-- Oracle 高风险 DDL / DML
-- Linux 高风险系统命令
-- 文件系统高风险删除操作
-
-
-14. 多语言支持
-
-防御页面已接入 i18n。
-
-新增 key 包括：
-
-- defense.title
-- defense.subtitle
-- defense.empty
-- defense.banner
-- defense.filterPlaceholder
-- defense.noMatch
-- defense.warn
-- defense.block
-- defense.stats.*
-- defense.buttons.*
-- defense.table.*
-- defense.category.*
-- defense.severity.*
-- defense.mode.*
-
-已同步更新语言文件：
-
-- zh.json
-- en.json
-- zh-TW.json
-- ja.json
-- ko.json
-- de.json
-- fr.json
-
-
-15. 当前实现特点
-
-当前防御页面具备以下特点：
-
-- 风格与其它页面统一
-- 具备 dashboard 摘要卡片
-- 具备危险命令管理表格
-- 具备关键字过滤交互
-- 具备新增/编辑/删除按钮样式
-- 适合用于产品演示和后续交互设计延伸
-
-
-16. 当前没有实现的内容
-
-当前版本未实现：
-
-- 后端规则接口
-- 规则持久化
-- 规则编辑弹窗
-- 规则新增表单
-- 真正的命令审查逻辑
-- 真正的 AI 执行前拦截
-- 按 workspace / agent / user 区分规则
-- 命中规则后的提示或阻止动作
-
-
-17. 后续可扩展方向
-
-后续如果继续开发，可考虑：
-
-- 增加后端 defense 配置接口
-- 规则保存到 json / db
-- 增加新增/编辑弹窗
-- 支持正则命令匹配
-- 支持命令白名单 / 黑名单
-- 支持按命令类型区分处理策略
-- 支持“提示后允许执行”
-- 支持“阻止并记录审计”
-- 与审计页面联动，记录命中防御规则的事件
-
-
-18. 本次涉及的主要文件
-
-前端：
-
-- E:\nanobot-main\nanobot-webui-main\web\src\pages\Defense.tsx
-
-多语言：
-
-- E:\nanobot-main\nanobot-webui-main\web\src\i18n\locales\zh.json
-- E:\nanobot-main\nanobot-webui-main\web\src\i18n\locales\en.json
-- E:\nanobot-main\nanobot-webui-main\web\src\i18n\locales\zh-TW.json
-- E:\nanobot-main\nanobot-webui-main\web\src\i18n\locales\ja.json
-- E:\nanobot-main\nanobot-webui-main\web\src\i18n\locales\ko.json
-- E:\nanobot-main\nanobot-webui-main\web\src\i18n\locales\de.json
-- E:\nanobot-main\nanobot-webui-main\web\src\i18n\locales\fr.json

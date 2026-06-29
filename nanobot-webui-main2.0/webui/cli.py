@@ -148,6 +148,15 @@ def webui_start(
     oracle_config: Optional[str] = typer.Option(
         None, "--oracle-config", help="Path to Oracle DB connection JSON file"
     ),
+    tool_policy: Optional[str] = typer.Option(
+        None, "--tool-policy", help="Path to dangerous tool policy JSON file"
+    ),
+    oracle_audit: bool = typer.Option(
+        False, "--oracle-audit", help="Enable async Oracle persistence for the audit table"
+    ),
+    oracle_memory: bool = typer.Option(
+        False, "--oracle-memory", help="Enable async Oracle persistence for the memory table"
+    ),
     config_path: Optional[str] = typer.Option(
         None, "--config", "-c", help="Path to config file"
     ),
@@ -174,6 +183,9 @@ def webui_start(
             host=host,
             workspace=workspace,
             oracle_config=oracle_config,
+            tool_policy=tool_policy,
+            oracle_audit=oracle_audit,
+            oracle_memory=oracle_memory,
             config_path=config_path,
             log_level=log_level,
             webui_only=webui_only,
@@ -193,6 +205,9 @@ def webui_start(
         web_host=host,
         workspace=workspace,
         oracle_config=oracle_config,
+        tool_policy=tool_policy,
+        oracle_audit=oracle_audit,
+        oracle_memory=oracle_memory,
         log_level=log_level,
         webui_only=webui_only,
     ))
@@ -269,6 +284,9 @@ def webui_restart(
     host: str = typer.Option("0.0.0.0", "--host", help="Bind address"),
     workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help="Override workspace directory"),
     oracle_config: Optional[str] = typer.Option(None, "--oracle-config", help="Path to Oracle DB connection JSON file"),
+    tool_policy: Optional[str] = typer.Option(None, "--tool-policy", help="Path to dangerous tool policy JSON file"),
+    oracle_audit: bool = typer.Option(False, "--oracle-audit", help="Enable async Oracle persistence for the audit table"),
+    oracle_memory: bool = typer.Option(False, "--oracle-memory", help="Enable async Oracle persistence for the memory table"),
     config_path: Optional[str] = typer.Option(None, "--config", "-c", help="Path to config file"),
     log_level: str = typer.Option("DEBUG", "--log-level", "-l", help="Log level"),
 ) -> None:
@@ -289,6 +307,9 @@ def webui_restart(
         host=host,
         workspace=workspace,
         oracle_config=oracle_config,
+        tool_policy=tool_policy,
+        oracle_audit=oracle_audit,
+        oracle_memory=oracle_memory,
         config_path=config_path,
         log_level=log_level,
     )
@@ -350,6 +371,9 @@ def _start_daemon(
     host: str,
     workspace: Optional[str],
     oracle_config: Optional[str],
+    tool_policy: Optional[str],
+    oracle_audit: bool,
+    oracle_memory: bool,
     config_path: Optional[str],
     log_level: str = "DEBUG",
     webui_only: bool = False,
@@ -376,6 +400,12 @@ def _start_daemon(
         cmd += ["--workspace", workspace]
     if oracle_config:
         cmd += ["--oracle-config", oracle_config]
+    if tool_policy:
+        cmd += ["--tool-policy", tool_policy]
+    if oracle_audit:
+        cmd += ["--oracle-audit"]
+    if oracle_memory:
+        cmd += ["--oracle-memory"]
     if config_path:
         cmd += ["--config", config_path]
     if log_level and log_level.upper() != "DEBUG":
@@ -432,6 +462,12 @@ def _make_standalone_parser():
     p.add_argument("--workspace", default=None, help="Override workspace directory")
     p.add_argument("--oracle-config", default=None, dest="oracle_config",
                    help="Path to Oracle DB connection JSON file")
+    p.add_argument("--tool-policy", default=None, dest="tool_policy",
+                   help="Path to dangerous tool policy JSON file")
+    p.add_argument("--oracle-audit", action="store_true", default=False, dest="oracle_audit",
+                   help="Enable async Oracle persistence for the audit table")
+    p.add_argument("--oracle-memory", action="store_true", default=False, dest="oracle_memory",
+                   help="Enable async Oracle persistence for the memory table")
     p.add_argument("--config", default=None, dest="config_path",
                    help="Path to config file")
     p.add_argument("--log-level", default="DEBUG", dest="log_level",
@@ -454,5 +490,8 @@ async def _run_all_from_args(args) -> None:
         web_host=args.host,
         workspace=args.workspace,
         oracle_config=getattr(args, "oracle_config", None),
+        tool_policy=getattr(args, "tool_policy", None),
+        oracle_audit=getattr(args, "oracle_audit", False),
+        oracle_memory=getattr(args, "oracle_memory", False),
         log_level=getattr(args, "log_level", "DEBUG"),
     )

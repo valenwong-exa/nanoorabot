@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "name": "dangerous_tool_policy",
+  "source": "webui-defense-page",
+  "description": "Initial dangerous command policy seeded from the WebUI Defense page demo rules.",
+  "updated_at": "2026-06-25T08:17:30+00:00",
+  "rules": [
+    {
+      "command": "truncate table",
+      "matchType": "literal",
+      "regexFlags": "",
+      "category": "oracle",
+      "severity": "critical",
+      "mode": "block",
+      "scope": "SQL",
+      "note": "高风险数据清空操作"
+    },
+    {
+      "command": "drop table",
+      "matchType": "literal",
+      "regexFlags": "",
+      "category": "oracle",
+      "severity": "critical",
+      "mode": "block",
+      "scope": "SQL",
+      "note": "直接删除表结构与数据"
+    },
+    {
+      "command": "delete from",
+      "matchType": "literal",
+      "regexFlags": "",
+      "category": "oracle",
+      "severity": "high",
+      "mode": "warn",
+      "scope": "SQL",
+      "note": "大批量删除需要人工确认"
+    },
+    {
+      "command": "\\bupdate\\b[\\s\\S]*?\\bset\\b(?:(?!\\bwhere\\b)[\\s\\S])*$",
+      "matchType": "regex",
+      "regexFlags": "i",
+      "category": "oracle",
+      "severity": "high",
+      "mode": "warn",
+      "scope": "SQL",
+      "note": "避免整表更新"
+    },
+    {
+      "command": "\\balter\\s+system\\s+flush\\s+shared_pool\\b",
+      "matchType": "regex",
+      "regexFlags": "i",
+      "category": "oracle",
+      "severity": "high",
+      "mode": "warn",
+      "scope": "SQL",
+      "note": "刷新 Shared Pool 前需要人工确认"
+    },
+    {
+      "command": "rm -rf",
+      "matchType": "literal",
+      "regexFlags": "",
+      "category": "filesystem",
+      "severity": "critical",
+      "mode": "block",
+      "scope": "Shell",
+      "note": "危险递归删除命令"
+    },
+    {
+      "command": "shutdown -h now",
+      "matchType": "literal",
+      "regexFlags": "",
+      "category": "linux",
+      "severity": "critical",
+      "mode": "block",
+      "scope": "Shell",
+      "note": "主机关机命令"
+    },
+    {
+      "command": "reboot",
+      "matchType": "literal",
+      "regexFlags": "",
+      "category": "linux",
+      "severity": "high",
+      "mode": "warn",
+      "scope": "Shell",
+      "note": "主机重启前要求提示"
+    }
+  ]
+}

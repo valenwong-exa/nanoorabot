@@ -141,6 +141,7 @@ export default function Login() {
               </div>
               <ol className="list-decimal space-y-2 pl-5 text-sm text-foreground/85">
                 <li>welcome to use nanoorabot</li>
+                <li>nanoorabot release v0.2.1,  2026-06-02</li>
               </ol>
             </div>
           </CardContent>

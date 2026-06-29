@@ -254,6 +254,7 @@ def apply() -> None:
     from nanobot.agent.runner import AgentRunSpec
     from nanobot.agent.subagent import SubagentManager, _SubagentHook
     from nanobot.bus.events import OutboundMessage
+    from nanobot.security.workspace_access import bind_workspace_scope, reset_workspace_scope
 
     _original_announce_result = SubagentManager._announce_result
 
@@ -298,16 +299,14 @@ def apply() -> None:
         origin: dict[str, str],
         status: Any = None,
         origin_message_id: str | None = None,
+        temperature: float | None = None,
+        workspace_scope: Any = None,
     ) -> None:
-        """Augmented _run_subagent using the native v0.2.0 runner flow."""
+        """Augmented _run_subagent that stays compatible with the current runtime."""
 
         channel = origin.get("channel", "")
         chat_id = str(origin.get("chat_id", ""))
         chat_key = _resolve_subagent_chat_key(channel, chat_id)
-        # For cron sessions, the session_key (e.g. "cron:abc123") differs from
-        # chat_key ("cli:direct").  Use origin["session_key"] when available so
-        # sub-agent messages are persisted under the correct session.
-        save_session_key = origin.get("session_key") or chat_key
 
         async def _emit_progress(hint: str) -> None:
             """Push a tool-hint progress event via the appropriate path."""
@@ -330,11 +329,22 @@ def apply() -> None:
                 except Exception:
                     pass
 
+        async def _on_checkpoint(payload: dict[str, Any]) -> None:
+            if status is None:
+                return
+            status.phase = payload.get("phase", status.phase)
+            status.iteration = payload.get("iteration", status.iteration)
+
         logger.info("Subagent [{}] starting task: {}", task_id, label)
 
         try:
-            tools = self._build_tools()
-            system_prompt = self._build_subagent_prompt()
+            root = workspace_scope.project_path if workspace_scope is not None else self.workspace
+            cfg = None
+            if workspace_scope is not None:
+                cfg = self._subagent_tools_config()
+                cfg.restrict_to_workspace = workspace_scope.restrict_to_workspace
+            tools = self._build_tools(workspace=root, tools_config=cfg)
+            system_prompt = self._build_subagent_prompt(workspace=root)
             messages: list[dict[str, Any]] = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": task},
@@ -346,20 +356,28 @@ def apply() -> None:
                 if self._llm_wall_timeout_for_session
                 else None
             )
-            result = await self.runner.run(AgentRunSpec(
-                initial_messages=messages,
-                tools=tools,
-                model=self.model,
-                max_iterations=self.max_iterations,
-                max_tool_result_chars=self.max_tool_result_chars,
-                hook=_WebUISubagentHook(task_id, status, _emit_progress),
-                max_iterations_message=_NO_FINAL_RESPONSE_TEXT,
-                error_message=None,
-                fail_on_tool_error=True,
-                checkpoint_callback=_on_checkpoint,
-                session_key=sess_key,
-                llm_timeout_s=llm_timeout,
-            ))
+            token = bind_workspace_scope(workspace_scope) if workspace_scope is not None else None
+            try:
+                result = await self.runner.run(AgentRunSpec(
+                    initial_messages=messages,
+                    tools=tools,
+                    model=self.model,
+                    temperature=temperature,
+                    max_iterations=self.max_iterations,
+                    max_tool_result_chars=self.max_tool_result_chars,
+                    hook=_WebUISubagentHook(task_id, status, _emit_progress),
+                    max_iterations_message=_NO_FINAL_RESPONSE_TEXT,
+                    finalize_on_max_iterations=False,
+                    error_message=None,
+                    fail_on_tool_error=True,
+                    checkpoint_callback=_on_checkpoint,
+                    session_key=sess_key,
+                    workspace=root,
+                    llm_timeout_s=llm_timeout,
+                ))
+            finally:
+                if token is not None:
+                    reset_workspace_scope(token)
             messages = list(result.messages)
             if status is not None:
                 status.phase = "done"

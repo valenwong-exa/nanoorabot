@@ -22,12 +22,14 @@ def apply() -> None:
         *,
         max_tokens: int = 0,
         include_timestamps: bool = False,
+        extend_to_user: bool = False,
     ):  # type: ignore[override]
         history = _orig_get_history(
             self,
             max_messages=max_messages,
             max_tokens=max_tokens,
             include_timestamps=include_timestamps,
+            extend_to_user=extend_to_user,
         )
         return [m for m in history if m.get("role") != "sub_tool"]
 

@@ -3,17 +3,49 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable
+from pathlib import Path
+from typing import Any, Awaitable, Callable
 
 from nanobot.agent.loop import AgentLoop
 from nanobot.bus.queue import MessageBus
 from nanobot.config.schema import Config
 from nanobot.cron.service import CronService
-from nanobot.heartbeat.service import HeartbeatService
 from nanobot.session.manager import SessionManager
 
 from webui.api.channel_ext import ExtendedChannelManager
 from webui.oracle_config import OracleConfigService
+from webui.tool_policy import ToolPolicyService
+
+
+class HeartbeatCompatService:
+    """Minimal heartbeat adapter for nanobot 0.2.2 runtime."""
+
+    def __init__(
+        self,
+        *,
+        workspace: Path,
+        provider: Any = None,
+        model: str | None = None,
+        on_execute: Callable[[str], Awaitable[str]] | None = None,
+        on_notify: Callable[[str], Awaitable[None]] | None = None,
+        interval_s: int = 30 * 60,
+        enabled: bool = True,
+    ) -> None:
+        self.workspace = Path(workspace)
+        self.provider = provider
+        self.model = model
+        self.on_execute = on_execute
+        self.on_notify = on_notify
+        self.interval_s = interval_s
+        self.enabled = enabled
+
+    async def start(self) -> None:
+        """Keep the old lifecycle hook shape without spawning a legacy service."""
+        return None
+
+    def stop(self) -> None:
+        """Keep the old lifecycle hook shape without spawning a legacy service."""
+        return None
 
 
 @dataclass
@@ -26,8 +58,9 @@ class ServiceContainer:
     channels: ExtendedChannelManager
     session_manager: SessionManager
     cron: CronService
-    heartbeat: HeartbeatService
+    heartbeat: HeartbeatCompatService
     oracle_config: OracleConfigService
+    tool_policy: ToolPolicyService
     make_provider: Callable = field(default=lambda cfg: None)
     webui_only: bool = False
 
