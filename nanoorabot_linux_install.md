@@ -1,118 +1,262 @@
-# OCI Linux Step provided by Qiong Wu
-## 创建虚拟环境环境 | Create venv
-```
-python3 -m venv .nanobot-webui
-. .nanobot-webui/bin/activate
+# Linux Quick Install Guide
+
+You can use AI to translate this file into your language if needed.
+
+## Scope
+
+This document targets a fresh Linux machine and explains how to install and start the current release source package.
+
+The release layout assumed by this guide is:
+
+```text
+/home/opc/nanoorabot
+|-- INSTALL.md
+|-- nanoorabot_linux_install.md
+|-- runtime
+|   |-- config.webui.json
+|   |-- oracle_config.json
+|   |-- tool_policy.json
+|   |-- dangerous_tool_policy.json
+|   `-- webui_config.json
+|-- nanobot-main2.2
+`-- nanobot-webui-main2.0
 ```
 
-## 安装 Python 依赖 | Install py lib
-```
-cd nanoorabot
-python -m pip install --upgrade pip setuptools wheel
-python -m pip install -e nanobot-015post1
-python -m pip install -e nanobot-webui-main
+If your release package is stored in another directory, replace the example paths below with your actual paths.
+
+## Package Overview
+
+The current release contains two source folders:
+
+- `nanobot-main2.2`
+  - nanobot core source
+  - current local package version: `nanobot-ai==0.2.2`
+- `nanobot-webui-main2.0`
+  - WebUI source
+  - current local package version: `nanobot-webui==0.2.6`
+
+Notes:
+
+- This is a source installation, not a single binary package.
+- First deployment requires Python and Node.js.
+- This guide recommends `python3 -m venv` and editable install because it matches the current release structure.
+- The main workflow below uses shell commands directly so you can see real-time logs in the terminal.
+
+## Prerequisites
+
+Install or verify:
+
+- Python `>= 3.11`
+- Node.js `>= 20`
+- npm
+
+Example:
+
+```bash
+python3 --version
+node --version
+npm --version
 ```
 
-安装完成后，可立刻执行下面命令验证 nanobot-ai 是否来自本地 nanobot-015post1：  | Verify
-```
-python -m pip show nanobot-ai
+## 1. Create a Shared venv
+
+It is recommended to create the virtual environment under `nanobot-main2.2` and let both projects share it.
+
+```bash
+cd /home/opc/nanoorabot/nanobot-main2.2
+python3 -m venv .venv
+./.venv/bin/python -m pip install --upgrade pip setuptools wheel
 ```
 
-## 构建前端 | build front
+## 2. Install Python Packages
+
+Install the core package first, then install WebUI with the same Python interpreter:
+
+```bash
+cd /home/opc/nanoorabot/nanobot-main2.2
+./.venv/bin/python -m pip install -e .
+
+cd /home/opc/nanoorabot/nanobot-webui-main2.0
+/home/opc/nanoorabot/nanobot-main2.2/.venv/bin/python -m pip install -e .
 ```
-cd ~/nanoorabot/nanobot-webui-main
+
+Verify editable locations:
+
+```bash
+/home/opc/nanoorabot/nanobot-main2.2/.venv/bin/python -m pip show nanobot-ai
+/home/opc/nanoorabot/nanobot-main2.2/.venv/bin/python -m pip show nanobot-webui
+```
+
+Confirm:
+
+- `nanobot-ai` points to `/home/opc/nanoorabot/nanobot-main2.2`
+- `nanobot-webui` points to `/home/opc/nanoorabot/nanobot-webui-main2.0`
+
+## 3. Build the Frontend
+
+```bash
+cd /home/opc/nanoorabot/nanobot-webui-main2.0/web
 npm install --legacy-peer-deps
 npm run build
 ```
 
-## 同步前端产物到后端静态目录 | Copy static resource 
-切换到项目根目录 | switch to root 
+## 4. Sync Frontend Assets to Backend Static Directory
+
+If `rsync` is available, use:
+
+```bash
+cd /home/opc/nanoorabot/nanobot-webui-main2.0
+rsync -a --delete web/dist/ webui/web/dist/
 ```
-cd /home/opc/nanoorabot-main/nanobot-webui-main
+
+If `rsync` is not available, use:
+
+```bash
+cd /home/opc/nanoorabot/nanobot-webui-main2.0
 rm -rf webui/web/dist
 mkdir -p webui/web/dist
-cp -rn web/dist/* webui/web/dist/
+cp -r web/dist/. webui/web/dist/
 ```
 
+At minimum, confirm these files exist:
 
-## 配置初始化（重要）| initial config
-本次手工安装方式，建议直接修改已有运行时配置。
-需要重点确认以下两个文件：| two important files
-    ~/nanoorabot/nanobot-runtime/config.json
-    ~/nanoorabot/nanobot-webui-main/s.sh
- config.json ：
-    Model APY
-    workspace path
-
-
-s.sh 里建议至少确认这些变量已经改成你的实际路径：
-```
-#!/bin/bash
-
-# --- config variable ---
-# 请根据实际路径修改，建议使用绝对路径 | modify path as your env, suggest to use direct path
-ROOT="/home/opc/nanoorabot/nanobot-webui-main"
-WEB="$ROOT/web"
-WEB_DIST="$WEB/dist"
-SERVER_DIST="$ROOT/webui/web/dist"
-CONFIG="/home/opc/nanoorabot/nanobot-runtime/config.json"
-WORKSPACE="/home/opc/nanoorabot/nanobot-runtime/workspace/dba1"
-PORT=18780
-
-# 确保脚本在出错时停止
-set -e
-
-echo "[1/4] Building frontend..."
-cd "$WEB"
-# 使用 npm run build
-npm run build
-
-echo "[2/4] Syncing static assets..."
-# 如果目录存在则清理，mkdir -p 确保父目录存在
-rm -rf "$SERVER_DIST"
-mkdir -p "$(dirname "$SERVER_DIST")"
-# 使用 cp -r 将编译产物同步到后端静态目录
-cp -r "$WEB_DIST" "$(dirname "$SERVER_DIST")"
-
-echo "[3/4] Checking port $PORT..."
-# 获取占用端口的 PID
-PID=$(lsof -t -i:$PORT || true)
-
-# 检查 PID 是否不为空
-if [ -n "$PID" ]; then
-    echo "Killing PID $PID on port $PORT..."
-    # 使用 xargs 确保即使有多个 PID 也能处理，且 kill 前确认进程确实存在
-    echo "$PID" | xargs kill -9 2>/dev/null || true
-else
-    echo "Port $PORT is free."
-fi
-
-echo "[4/4] Starting WebUI..."
-cd "$ROOT"
-##  active venv
-source ~/nanoorabot/.nanobot-webui/bin/activate
-
-##   nohup running
-nohup python3 -m webui \
-    --host 0.0.0.0 \
-    --port $PORT \
-    --workspace "$WORKSPACE" \
-    --config "$CONFIG" \
-    --webui-only \
-    --log-level INFO > webui.log 2>&1 &
-
-echo "------------------------------------------------"
-echo "Done. WebUI is running in background."
-echo "Access at: http://<Your_Server_IP>:$PORT/"
-echo "Check logs with: tail -f webui.log"
-echo "------------------------------------------------"
+```text
+/home/opc/nanoorabot/nanobot-webui-main2.0/web/dist/index.html
+/home/opc/nanoorabot/nanobot-webui-main2.0/webui/web/dist/index.html
 ```
 
-## 开放18780 | Open 18780 port
+## 5. Runtime Configuration
+
+The current release uses the root `runtime` directory, not the old `nanobot-runtime/config.json` layout.
+
+Check these files carefully:
+
+- `/home/opc/nanoorabot/runtime/config.webui.json`
+- `/home/opc/nanoorabot/runtime/oracle_config.json`
+- `/home/opc/nanoorabot/runtime/tool_policy.json`
+- `/home/opc/nanoorabot/runtime/dangerous_tool_policy.json`
+- `/home/opc/nanoorabot/runtime/webui_config.json`
+
+Most important items:
+
+- `config.webui.json`
+  - model settings
+  - `agents.defaults.model`
+  - workspace related paths
+  - WebUI base settings
+- `oracle_config.json`
+  - Oracle connection settings
+- `tool_policy.json`
+  - tool policy
+- `dangerous_tool_policy.json`
+  - dangerous command policy
+
+If your workspace is not at the default path, replace `--workspace` in the startup commands below with your actual workspace path.
+
+## 6. Start the WebUI
+
+Recommended foreground mode with real-time console logs:
+
+```bash
+cd /home/opc/nanoorabot/nanobot-webui-main2.0
+
+/home/opc/nanoorabot/nanobot-main2.2/.venv/bin/python -m webui \
+  --host 0.0.0.0 \
+  --port 18780 \
+  --workspace "/home/opc/nanoorabot/dba1" \
+  --config "/home/opc/nanoorabot/runtime/config.webui.json" \
+  --oracle-config "/home/opc/nanoorabot/runtime/oracle_config.json" \
+  --tool-policy "/home/opc/nanoorabot/runtime/tool_policy.json" \
+  --log-level DEBUG
 ```
-sudo firewall-cmd --permanent --add-port=18780/tcp 
-sudo firewall-cmd --reload 
+
+Browser URL:
+
+```text
+http://<your_server_ip>:18780/
+```
+
+Default login:
+
+```text
+admin / nanobot
+```
+
+Optional background mode:
+
+```bash
+cd /home/opc/nanoorabot/nanobot-webui-main2.0
+nohup /home/opc/nanoorabot/nanobot-main2.2/.venv/bin/python -m webui \
+  --host 0.0.0.0 \
+  --port 18780 \
+  --workspace "/home/opc/nanoorabot/dba1" \
+  --config "/home/opc/nanoorabot/runtime/config.webui.json" \
+  --oracle-config "/home/opc/nanoorabot/runtime/oracle_config.json" \
+  --tool-policy "/home/opc/nanoorabot/runtime/tool_policy.json" \
+  --log-level DEBUG > webui.log 2>&1 &
+```
+
+Check logs:
+
+```bash
+tail -f /home/opc/nanoorabot/nanobot-webui-main2.0/webui.log
+```
+
+## 7. Start the CLI (Optional)
+
+If you only need the CLI agent:
+
+```bash
+cd /home/opc/nanoorabot/nanobot-main2.2
+
+./.venv/bin/python -m nanobot agent \
+  --config "/home/opc/nanoorabot/runtime/config.webui.json" \
+  --workspace "/home/opc/nanoorabot/dba1"
+```
+
+## 8. Open Port 18780 (If Needed)
+
+For systems using `firewalld`:
+
+```bash
+sudo firewall-cmd --permanent --add-port=18780/tcp
+sudo firewall-cmd --reload
 sudo firewall-cmd --list-ports
 ```
+
+## FAQ
+
+### 1. Web backend starts, but the page has no frontend UI
+
+Usually one of these steps is missing:
+
+- `npm run build`
+- syncing `web/dist` to `webui/web/dist`
+
+### 2. Port `18780` is already in use
+
+Either:
+
+- use another port
+- or stop the process currently using `18780`
+
+### 3. Login works, but chat does not work
+
+Usually this means model configuration is incomplete or invalid.
+
+Check:
+
+- `/home/opc/nanoorabot/runtime/config.webui.json`
+- `providers`
+- `agents.defaults.model`
+- network connectivity
+
+### 4. Oracle related functions are unavailable
+
+Check:
+
+- `/home/opc/nanoorabot/runtime/oracle_config.json`
+- SQLcl installation on the Linux machine
+- configured database connection names
 
 

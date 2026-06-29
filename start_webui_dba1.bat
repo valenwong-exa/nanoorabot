@@ -3,23 +3,33 @@ setlocal
 
 set "ROOT=%~dp0"
 if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
-set "WEB=%ROOT%\web"
+set "WEBUI_ROOT=%ROOT%\nanobot-webui-main2.0"
+set "WEB=%WEBUI_ROOT%\web"
 set "WEB_DIST=%WEB%\dist"
-set "SERVER_WEB=%ROOT%\webui\web"
+set "SERVER_WEB=%WEBUI_ROOT%\webui\web"
 set "SERVER_DIST=%SERVER_WEB%\dist"
-for %%I in ("%ROOT%\..\nanobot-main2.2") do set "NANOBOT_ROOT=%%~fI"
+set "NANOBOT_ROOT=%ROOT%\nanobot-main2.2"
 set "CONFIG=%ROOT%\runtime\config.webui.json"
 set "ORACLE_CONFIG=%ROOT%\runtime\oracle_config.json"
 set "TOOL_POLICY=%ROOT%\runtime\tool_policy.json"
 set "LOG_DIR=%ROOT%\runtime\logs"
 set "START_LOG=%LOG_DIR%\start_webui_dba1.log"
-for %%I in ("%ROOT%\..\dba1") do set "WORKSPACE=%%~fI"
-set "PORT=18780"
+if not defined WORKSPACE (
+    if exist "%ROOT%\dba1" (
+        set "WORKSPACE=%ROOT%\dba1"
+    ) else if exist "%ROOT%\workspace" (
+        set "WORKSPACE=%ROOT%\workspace"
+    ) else if exist "%ROOT%\runtime\workspace\dba1" (
+        set "WORKSPACE=%ROOT%\runtime\workspace\dba1"
+    )
+)
+if not defined PORT set "PORT=18780"
 set "PYTHON_EXE=%NANOBOT_ROOT%\.venv\Scripts\python.exe"
 
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 call :log "==== start_webui_dba1 ===="
 call :log "ROOT=%ROOT%"
+call :log "WEBUI_ROOT=%WEBUI_ROOT%"
 call :log "WORKSPACE=%WORKSPACE%"
 call :log "PORT=%PORT%"
 call :log "PYTHON=%PYTHON_EXE%"
@@ -62,6 +72,13 @@ if not exist "%TOOL_POLICY%" (
     goto :error
 )
 
+if not defined WORKSPACE (
+    echo Workspace is not configured.
+    echo Please set WORKSPACE before running this script, for example:
+    echo   set "WORKSPACE=D:\your-workspace"
+    goto :error
+)
+
 if not exist "%WORKSPACE%" (
     echo Workspace not found: "%WORKSPACE%"
     goto :error
@@ -99,7 +116,7 @@ echo [4/4] Starting WebUI...
 echo --oracle-audit --oracle-memory not enabled.
 call :log "[4/4] Starting WebUI"
 call :log "NANOBOT_ROOT=%NANOBOT_ROOT%"
-cd /d "%ROOT%"
+cd /d "%WEBUI_ROOT%"
 start "AI System Agent WebUI 2.2" cmd /d /k ""%PYTHON_EXE%" -m webui --host 0.0.0.0 --port %PORT% --workspace "%WORKSPACE%" --config "%CONFIG%" --log-level DEBUG --oracle-config "%ORACLE_CONFIG%" --tool-policy "%TOOL_POLICY%" 
 set "PORT_READY="
 for /l %%I in (1,1,15) do (
