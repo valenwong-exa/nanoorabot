@@ -105,7 +105,7 @@ Check RAG onboard document about how to config Oracle 26ai vector search
 **本项目采用 MIT 许可证开源。**
 *This project is open-sourced under the MIT License.*
 
-**请保留Valen Wang（王探长），Wanbin，Lijie 和AI Database Plaftform Team的署名 Please retain the bylines of Valen Wang and the AI Database Platform Team.*
+**请保留Valen Wang（王探长），Barry Wang，Lijie 和AI Database Plaftform Team的署名 Please retain the bylines of Valen Wang,Barry Wang, Sam Li and the AI Database Platform Team.*
 
 **任何人都可以免费获取本软件及其相关文档的副本，并在满足 MIT 协议条款的前提下进行使用、复制、修改、合并、发布、分发等操作。**
 *Anyone can obtain a copy of this software and its associated documentation files for free, and use, copy, modify, merge, publish, distribute, etc., under the terms of the MIT License.*
