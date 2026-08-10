@@ -246,6 +246,46 @@ class HostInventoryRefreshConfigRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Voice
+# ---------------------------------------------------------------------------
+
+
+class VoiceHealthResponse(BaseModel):
+    ok: bool
+    reason: str | None = None
+    sensevoiceDir: str
+    modelPy: str
+    pythonExecutable: str
+    modelLoaded: bool
+    device: str | None = None
+    missingDependencies: list[str] = Field(default_factory=list)
+    missingPaths: list[str] = Field(default_factory=list)
+
+
+class VoiceInputDeviceInfo(BaseModel):
+    index: int
+    name: str
+    hostapi: str | None = None
+    maxInputChannels: int
+    defaultSamplerate: float | None = None
+    isDefault: bool
+
+
+class VoiceDevicesResponse(BaseModel):
+    items: list[VoiceInputDeviceInfo]
+
+
+class VoiceTranscriptionResponse(BaseModel):
+    success: bool
+    text: str
+    language: str
+    device: str
+    inferenceMs: int
+    audioDurationMs: int | None = None
+    filename: str | None = None
+
+
+# ---------------------------------------------------------------------------
 # S3 / OSS Storage
 # ---------------------------------------------------------------------------
 

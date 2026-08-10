@@ -10,7 +10,7 @@ This document targets a fresh Windows machine and explains how to install and st
 当前文档适配的发布结构是：
 
 ```text
-E:\nanoorabot
+D:\nanoorabot
 |-- INSTALL.md
 |-- runtime
 |   |-- config.webui.json
@@ -18,10 +18,12 @@ E:\nanoorabot
 |   |-- tool_policy.json
 |   |-- dangerous_tool_policy.json
 |   `-- webui_config.json
-|-- start_webui_dba1.bat
-|-- start_cli_dba1.bat
-|-- nanobot-main2.2
-`-- nanobot-webui-main2.0
+|-- nanobot-main3.0
+|-- nanobot-webui-main2.0
+|   |-- start_cli_dba1.bat
+|   `-- start_webui_dba1_main3.bat
+|-- SenseVoice-main
+`-- dba1
 ```
 
 如果你把发布包放到别的盘符或目录，也可以，下面命令中的路径按你的实际位置替换即可。  
@@ -31,9 +33,9 @@ If you put the release package in another drive or folder, simply replace the ex
 
 当前发布包由两个源码目录组成：
 
-- `nanobot-main2.2`
+- `nanobot-main3.0`
   - nanobot 核心源码
-  - 当前包版本是 `nanobot-ai==0.2.2`
+  - 当前包版本是 `nanobot-ai==0.3.0`
 - `nanobot-webui-main2.0`
   - WebUI 源码
   - 当前包版本是 `nanobot-webui==0.2.6`
@@ -69,49 +71,69 @@ The examples below assume the release package root is `D:\nanoorabot`.
 
 ### 1. 创建 Python 虚拟环境
 
-推荐把虚拟环境创建在 `nanobot-main2.2` 目录下，这样更贴近当前脚本约定。
+推荐把两个项目共用的虚拟环境创建在 `nanobot-webui-main2.0` 目录下；当前 3.0 启动脚本也从这里查找 `.venv`。
 
 ```powershell
-cd /d D:\nanoorabot\nanobot-main2.2
+Set-Location "D:\nanoorabot\nanobot-webui-main2.0"
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
 ```
 
 ### 2. 安装 Python 依赖
 
-先安装核心源码，再安装 WebUI 源码：
+按下面顺序安装：
+
+1. 先安装核心源码
+2. 再安装 WebUI 源码
 
 ```powershell
-cd /d D:\nanoorabot\nanobot-main2.2
-.\.venv\Scripts\python.exe -m pip install -e .
+Set-Location "D:\nanoorabot\nanobot-main3.0"
+D:\nanoorabot\nanobot-webui-main2.0\.venv\Scripts\python.exe -m pip install -e .
 
-cd /d D:\nanoorabot\nanobot-webui-main2.0
-D:\nanoorabot\nanobot-main2.2\.venv\Scripts\python.exe -m pip install -e .
+Set-Location "D:\nanoorabot\nanobot-webui-main2.0"
+.\.venv\Scripts\python.exe -m pip install -e .
 ```
 
 说明：
 
-- `nanobot-webui` 的依赖里声明了 `nanobot-ai==0.2.0`，但你随后使用本地 `nanobot-main2.2` 的 editable 安装，最终会绑定到本地源码版本 `0.2.2`，这是正常行为。
+- `nanobot-webui` 与核心项目现在统一声明使用 `nanobot-ai==0.3.0`，不再需要重复安装核心源码。
+- 如果本机可以访问 PyPI，仍建议先安装本地核心，再安装 WebUI，确保使用发布包内的定制源码。
 - 推荐这两个项目共用同一个 `.venv`，避免环境分裂。
+
+关于语音功能：
+
+- 默认安装只包含 `nanobot` 和 `WebUI` 的必要依赖，**不包含语音识别相关依赖**。
+- 如果客户当前机器不需要语音功能，保持默认安装即可，`nanobot` 与 `WebUI` 主功能不会受影响。
+- 如果后续需要启用语音功能，再按需额外安装 voice 依赖即可：
+
+```powershell
+Set-Location "D:\nanoorabot\nanobot-webui-main2.0"
+.\.venv\Scripts\python.exe -m pip install -e ".[voice]"
+```
+
+- 启用语音时，还需要额外准备 `SenseVoice-main` 目录。
+- 请使用 `nanobot-webui-main2.0\.venv` 安装 voice 依赖，详细步骤请参考发布包中的 `nanobot-webui-main2.0\INSTALL_voice.md`。
 
 ### 3. 验证 Python 包绑定
 
 执行：
 
 ```powershell
-D:\nanoorabot\nanobot-main2.2\.venv\Scripts\python.exe -m pip show nanobot-ai
-D:\nanoorabot\nanobot-main2.2\.venv\Scripts\python.exe -m pip show nanobot-webui
+D:\nanoorabot\nanobot-webui-main2.0\.venv\Scripts\python.exe -m pip show nanobot-ai
+D:\nanoorabot\nanobot-webui-main2.0\.venv\Scripts\python.exe -m pip show nanobot-webui
 ```
 
 重点确认：
 
-- `nanobot-ai` 的 `Editable project location` 指向 `D:\nanoorabot\nanobot-main2.2`
+- `nanobot-ai` 的 `Editable project location` 指向 `D:\nanoorabot\nanobot-main3.0`
 - `nanobot-webui` 的 `Editable project location` 指向 `D:\nanoorabot\nanobot-webui-main2.0`
+
+再执行 `python -m pip check`，应显示 `No broken requirements found.`。如果仍显示旧的 `0.2.2` 依赖，请确认使用的是当前发布包中的 WebUI 源码并重新执行 editable 安装。
 
 ### 4. 构建前端
 
 ```powershell
-cd /d D:\nanoorabot\nanobot-webui-main2.0\web
+Set-Location "D:\nanoorabot\nanobot-webui-main2.0\web"
 npm install --legacy-peer-deps
 npm run build
 ```
@@ -121,7 +143,7 @@ npm run build
 当前工程约定使用 `robocopy /MIR` 同步前端产物：
 
 ```powershell
-cd /d D:\nanoorabot\nanobot-webui-main2.0
+Set-Location "D:\nanoorabot\nanobot-webui-main2.0"
 robocopy web\dist webui\web\dist /MIR /R:2 /W:1 /NFL /NDL /NJH /NJS /NP
 ```
 
@@ -143,6 +165,8 @@ D:\nanoorabot\nanobot-webui-main2.0\webui\web\dist\index.html
 - `D:\nanoorabot\runtime\tool_policy.json`
 - `D:\nanoorabot\runtime\dangerous_tool_policy.json`
 - `D:\nanoorabot\runtime\webui_config.json`
+
+GitHub 发布目录中的敏感字段已经清空。首次启动前，请在本机补充模型 API Key、频道 Secret/Token 和 Oracle 密码等实际值，并避免把填写后的凭据重新提交到 Git。
 
 其中最重要的是：
 
@@ -167,9 +191,10 @@ If your workspace is not in the default location, make sure to replace the `--wo
 It is recommended to start the WebUI from the command line so that you can see live logs in the console.
 
 ```powershell
-cd /d D:\nanoorabot\nanobot-webui-main2.0
+Set-Location "D:\nanoorabot\nanobot-webui-main2.0"
+$env:PYTHONPATH = "D:\nanoorabot\nanobot-main3.0"
 
-D:\nanoorabot\nanobot-main2.2\.venv\Scripts\python.exe -m webui `
+.\.venv\Scripts\python.exe -m webui `
   --host 0.0.0.0 `
   --port 18780 `
   --workspace "D:\nanoorabot\dba1" `
@@ -199,23 +224,24 @@ admin / nanobot
 如果你只想启动命令行 agent，可以执行：
 
 ```powershell
-cd /d D:\nanoorabot\nanobot-main2.2
+Set-Location "D:\nanoorabot\nanobot-main3.0"
+$env:PYTHONPATH = "D:\nanoorabot\nanobot-main3.0"
 
-.\.venv\Scripts\nanobot.exe agent `
+D:\nanoorabot\nanobot-webui-main2.0\.venv\Scripts\python.exe -m nanobot agent `
   --config "D:\nanoorabot\runtime\config.webui.json" `
   --workspace "D:\nanoorabot\dba1"
 ```
 
 ## 关于 bat 文件 / About the bat Files
 
-当前发布包中带有以下 bat 文件：
+当前 3.0 发布结构在 `nanobot-webui-main2.0` 中带有以下 Windows 启动模板：
 
-- `start_webui_dba1.bat`
-- `start_cli_dba1.bat`
+- `nanobot-webui-main2.0\start_webui_dba1_main3.bat`
+- `nanobot-webui-main2.0\start_cli_dba1.bat`
 
 但请注意：
 
-- 这些 bat 文件在不同机器、不同目录结构下通常仍需手工检查和修改路径。
+- 这些 bat 文件包含开发机路径和端口设置，在新机器上必须先检查 `NANOBOT_ROOT`、`WORKSPACE`、`CONFIG` 和 `PYTHON_EXE`。
 - 建议先按本文档使用命令行安装和启动，确认完全正常后，再根据自己的机器路径调整 bat 文件。
 
 ## 常见问题 / FAQ
@@ -263,5 +289,24 @@ cd /d D:\nanoorabot\nanobot-main2.2
 
 - 先按本文档中的命令手动启动
 - 等手工命令已经完全跑通后，再回头修改 bat 文件
+
+### 6. 页面里没有语音按钮，或者语音接口返回不可用
+
+这通常不是主系统故障，而是当前机器没有启用语音依赖。
+
+当前发布包默认策略是：
+
+- 默认安装不包含 voice 依赖
+- 未安装语音依赖时，聊天、配置、Oracle、会话等主功能仍然正常
+- 只有语音功能会保持关闭状态
+
+如果你确实需要启用语音，请额外完成两件事：
+
+- 安装 `nanobot-webui` 的 voice 依赖
+- 准备 `SenseVoice-main` 目录
+
+详细步骤请参考：
+
+- `INSTALL_voice.md`，并请使用 `nanobot-webui-main2.0\.venv` 安装 voice 依赖
 
 

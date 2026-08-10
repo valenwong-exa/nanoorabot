@@ -48,12 +48,12 @@ def _weixin_logged_in() -> bool:
 
 
 def _weixin_default_config() -> dict[str, Any]:
-    from nanobot.channels.weixin import WeixinConfig
+    from nanobot.channels.weixin.runtime import WeixinConfig
     return WeixinConfig().model_dump(by_alias=True)
 
 
 def _wecom_default_config() -> dict[str, Any]:
-    from nanobot.channels.wecom import WecomConfig
+    from nanobot.channels.wecom.runtime import WecomConfig
     return WecomConfig().model_dump(by_alias=True)
 
 

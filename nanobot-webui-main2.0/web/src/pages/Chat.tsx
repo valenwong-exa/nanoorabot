@@ -19,6 +19,10 @@ import type { MetadataTreeNode, OpenDatabaseMetadataResponse } from "../types/da
 
 import { CHANNEL_ICONS } from "../lib/channelIcons";
 
+const DATABASE_DEV_TOGGLE_STORAGE_KEY = "nanobot-chat-database-dev-visible";
+const CHAT_DATABASE_LIST_VISIBLE_STORAGE_KEY = "nanobot-chat-database-list-visible";
+const CHAT_HOST_LIST_VISIBLE_STORAGE_KEY = "nanobot-chat-host-list-visible";
+
 /** Extract the channel prefix from a session key, e.g. "feishu", "telegram", "web" */
 function channelOf(key: string): string {
   return key.split(":")[0] ?? "web";
@@ -187,6 +191,26 @@ export default function Chat() {
   const myPrefix = `web:${user?.id}:`;
   const [search, setSearch] = useState("");
   const [expandedInventoryPanel, setExpandedInventoryPanel] = useState<"database" | "host" | null>("host");
+  const [showDatabaseList] = useState<boolean>(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    const savedValue = window.localStorage.getItem(CHAT_DATABASE_LIST_VISIBLE_STORAGE_KEY);
+    return savedValue !== "false";
+  });
+  const [showHostList] = useState<boolean>(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    const savedValue = window.localStorage.getItem(CHAT_HOST_LIST_VISIBLE_STORAGE_KEY);
+    return savedValue !== "false";
+  });
+  const [showDatabaseDevActions, setShowDatabaseDevActions] = useState<boolean>(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return window.localStorage.getItem(DATABASE_DEV_TOGGLE_STORAGE_KEY) === "true";
+  });
   const [isDatabaseDrawerOpen, setIsDatabaseDrawerOpen] = useState(false);
   const [activeDatabaseMetadataTarget, setActiveDatabaseMetadataTarget] = useState<{
     connectionId: string;
@@ -246,9 +270,38 @@ export default function Chat() {
 
   const monitoredDatabases = hostInventory?.database_inventory ?? [];
   const hosts = hostInventory?.hosts ?? [];
-  const databasePanelCollapsed = expandedInventoryPanel !== "database";
-  const hostPanelCollapsed = expandedInventoryPanel !== "host";
-  const inventoryPanelExpanded = expandedInventoryPanel !== null;
+  const databasePanelCollapsed = !showDatabaseList || expandedInventoryPanel !== "database";
+  const hostPanelCollapsed = !showHostList || expandedInventoryPanel !== "host";
+  const inventoryPanelExpanded =
+    (showDatabaseList && expandedInventoryPanel === "database") ||
+    (showHostList && expandedInventoryPanel === "host");
+
+  useEffect(() => {
+    window.localStorage.setItem(DATABASE_DEV_TOGGLE_STORAGE_KEY, showDatabaseDevActions ? "true" : "false");
+  }, [showDatabaseDevActions]);
+
+  useEffect(() => {
+    window.localStorage.setItem(CHAT_DATABASE_LIST_VISIBLE_STORAGE_KEY, showDatabaseList ? "true" : "false");
+  }, [showDatabaseList]);
+
+  useEffect(() => {
+    window.localStorage.setItem(CHAT_HOST_LIST_VISIBLE_STORAGE_KEY, showHostList ? "true" : "false");
+  }, [showHostList]);
+
+  useEffect(() => {
+    if (showDatabaseList && showHostList) {
+      return;
+    }
+    if (showDatabaseList) {
+      setExpandedInventoryPanel((prev) => (prev === null ? "database" : prev === "host" ? "database" : prev));
+      return;
+    }
+    if (showHostList) {
+      setExpandedInventoryPanel((prev) => (prev === null ? "host" : prev === "database" ? "host" : prev));
+      return;
+    }
+    setExpandedInventoryPanel(null);
+  }, [showDatabaseList, showHostList]);
 
   const newChat = () => {
     const key = createWebSessionKey(user?.id);
@@ -521,202 +574,89 @@ export default function Chat() {
             </div>
           </section>
 
-          <div
-            className={cn(
-              "flex min-h-0 flex-col overflow-hidden border-t",
-              isMobile ? "bg-background" : "bg-card"
-            )}
-            style={{ flex: inventoryPanelExpanded ? "1 1 50%" : "0 0 auto" }}
-          >
-            <section
-              className={cn(
-                "flex min-h-0 flex-col overflow-hidden",
-                isMobile ? "bg-background" : "bg-card"
-              )}
-              style={{ flex: databasePanelCollapsed ? "0 0 auto" : "1 1 auto" }}
-            >
-              <div className={cn(
-                "flex shrink-0 items-center justify-between",
-                isMobile ? "px-4 py-3" : "px-3 py-2"
-              )}>
-                <span className="text-sm font-semibold">{t("chat.databaseList")}</span>
-                <button
-                  type="button"
-                  onClick={toggleDatabasePanel}
-                  title={databasePanelCollapsed ? t("chat.expandDatabaseList") : t("chat.collapseDatabaseList")}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  {databasePanelCollapsed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                </button>
-              </div>
-
-              {!databasePanelCollapsed && (
-                <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-2">
-                  <div className="space-y-2">
-                    {monitoredDatabases.length === 0 ? (
-                      <div className="rounded-xl border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
-                        {t("common.noData")}
-                      </div>
-                    ) : (
-                      monitoredDatabases.map((database, index) => (
-                        <div
-                          key={`${database.sqlcl_saveconnname ?? database.database_name ?? "database"}-${index}`}
-                          className="cursor-pointer rounded-xl border bg-background/70 px-3 py-2 shadow-sm transition-all hover:border-primary/40 hover:bg-primary/5 hover:shadow-md active:scale-[0.99]"
-                          onClick={() => handleDatabasePromptInsert(
-                            undefined,
-                            database.sqlcl_saveconnname,
-                            database.database_name,
-                            database.database_status
-                          )}
-                          role="button"
-                          tabIndex={0}
-                        >
-                          <div className="space-y-2">
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-medium leading-snug">
-                                {database.sqlcl_saveconnname
-                                  ? `${database.database_name} - ${database.sqlcl_saveconnname}`
-                                  : (database.database_name || "-")}
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  openDatabaseDrawer(database, { autoDevPrompt: false });
-                                }}
-                                className="rounded-md border border-primary/20 bg-primary/5 px-2 py-0.5 text-[10px] font-semibold text-primary transition-colors hover:border-primary/35 hover:bg-primary/10"
-                              >
-                                {t("chat.openDatabasePanel")}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  openDatabaseDrawer(database, { autoDevPrompt: true });
-                                }}
-                                className="rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700 transition-colors hover:border-sky-300 hover:bg-sky-100 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-300 dark:hover:bg-sky-950/45"
-                              >
-                                {t("chat.openDatabaseDevPanel")}
-                              </button>
-                              <span
-                                className={cn(
-                                  "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                                  getDatabaseStatusTone(database.database_status),
-                                )}
-                              >
-                                {database.database_status ?? "UNKNOWN"}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </section>
-
-            <section
+          {(showDatabaseList || showHostList) && (
+            <div
               className={cn(
                 "flex min-h-0 flex-col overflow-hidden border-t",
                 isMobile ? "bg-background" : "bg-card"
               )}
-              style={{ flex: hostPanelCollapsed ? "0 0 auto" : "1 1 auto" }}
+              style={{ flex: inventoryPanelExpanded ? "1 1 50%" : "0 0 auto" }}
             >
-              <div className={cn(
-                "flex shrink-0 items-center justify-between",
-                isMobile ? "px-4 py-3" : "px-3 py-2"
-              )}>
-                <span className={cn(
-                  "font-semibold",
-                  isMobile ? "text-sm" : "text-sm"
-                )}>
-                  {t("chat.hostList")}
-                </span>
-                <button
-                  type="button"
-                  onClick={toggleHostPanel}
-                  title={hostPanelCollapsed ? t("chat.expandHostList") : t("chat.collapseHostList")}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              {showDatabaseList && (
+                <section
+                  className={cn(
+                    "flex min-h-0 flex-col overflow-hidden",
+                    isMobile ? "bg-background" : "bg-card"
+                  )}
+                  style={{ flex: databasePanelCollapsed ? "0 0 auto" : "1 1 auto" }}
                 >
-                  {hostPanelCollapsed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                </button>
-              </div>
+                  <div className={cn(
+                    "flex shrink-0 items-center justify-between",
+                    isMobile ? "px-4 py-3" : "px-3 py-2"
+                  )}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-semibold">{t("chat.databaseList")}</span>
+                      <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={showDatabaseDevActions}
+                          onChange={(event) => setShowDatabaseDevActions(event.target.checked)}
+                          className="h-3.5 w-3.5 rounded border-border text-primary focus:ring-primary"
+                        />
+                        <span>{t("chat.databaseDevToggle")}</span>
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={toggleDatabasePanel}
+                      title={databasePanelCollapsed ? t("chat.expandDatabaseList") : t("chat.collapseDatabaseList")}
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      {databasePanelCollapsed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </button>
+                  </div>
 
-              {!hostPanelCollapsed && (
-                <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-2">
-                  <div className="space-y-2">
-                    {hosts.length === 0 ? (
-                      <div className="rounded-xl border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
-                        {t("common.noData")}
-                      </div>
-                    ) : (
-                      hosts.map((host) => (
-                        <div
-                          key={host.host_name}
-                          className="cursor-pointer rounded-xl border bg-background/70 p-2 shadow-sm transition-all hover:border-primary/40 hover:bg-primary/5 hover:shadow-md active:scale-[0.99]"
-                          onClick={() => handleHostPromptInsert(host.host_name)}
-                          role="button"
-                          tabIndex={0}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-medium leading-snug">
-                                {host.host_name}
-                              </div>
-                              <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                                {host.ip}
-                              </div>
-                            </div>
-                            <span
-                              className={cn(
-                                "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                                getHostStatusTone(host.host_status),
-                              )}
-                            >
-                              {host.host_status ?? "unknown"}
-                            </span>
+                  {!databasePanelCollapsed && (
+                    <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-2">
+                      <div className="space-y-2">
+                        {monitoredDatabases.length === 0 ? (
+                          <div className="rounded-xl border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
+                            {t("common.noData")}
                           </div>
-
-                          <div className="mt-2 space-y-1.5">
-                            {(host.databases ?? []).map((database, index) => (
-                              <div
-                                key={`${host.host_name}-${database.database_name}-${index}`}
-                                className="cursor-pointer rounded-lg border bg-muted/30 px-2 py-1.5 transition-all hover:border-primary/35 hover:bg-primary/5 hover:shadow-sm active:scale-[0.99]"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleDatabasePromptInsert(
-                                    host.host_name,
-                                    database.sqlcl_saveconnname,
-                                    database.database_name,
-                                    database.database_status
-                                  );
-                                }}
-                                role="button"
-                                tabIndex={0}
-                              >
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0 text-xs">
-                                    <div className="truncate font-medium leading-snug">
-                                      {database.database_name}
-                                    </div>
-                                    <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
-                                      {database.database_version || "-"}
-                                    </div>
+                        ) : (
+                          monitoredDatabases.map((database, index) => (
+                            <div
+                              key={`${database.sqlcl_saveconnname ?? database.database_name ?? "database"}-${index}`}
+                              className="cursor-pointer rounded-xl border bg-background/70 px-3 py-2 shadow-sm transition-all hover:border-primary/40 hover:bg-primary/5 hover:shadow-md active:scale-[0.99]"
+                              onClick={() => handleDatabasePromptInsert(
+                                undefined,
+                                database.sqlcl_saveconnname,
+                                database.database_name,
+                                database.database_status
+                              )}
+                              role="button"
+                              tabIndex={0}
+                            >
+                              <div className="space-y-2">
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-medium leading-snug">
+                                    {database.sqlcl_saveconnname
+                                      ? `${database.database_name} - ${database.sqlcl_saveconnname}`
+                                      : (database.database_name || "-")}
                                   </div>
-                                  <div className="flex shrink-0 items-center gap-1.5">
-                                    <button
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        openDatabaseDrawer(database, { autoDevPrompt: false });
-                                      }}
-                                      className="rounded-md border border-primary/20 bg-primary/5 px-2 py-0.5 text-[10px] font-semibold text-primary transition-colors hover:border-primary/35 hover:bg-primary/10"
-                                    >
-                                      {t("chat.openDatabasePanel")}
-                                    </button>
+                                </div>
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      openDatabaseDrawer(database, { autoDevPrompt: false });
+                                    }}
+                                    className="rounded-md border border-primary/20 bg-primary/5 px-2 py-0.5 text-[10px] font-semibold text-primary transition-colors hover:border-primary/35 hover:bg-primary/10"
+                                  >
+                                    {t("chat.openDatabasePanel")}
+                                  </button>
+                                  {showDatabaseDevActions && (
                                     <button
                                       type="button"
                                       onClick={(event) => {
@@ -727,27 +667,140 @@ export default function Chat() {
                                     >
                                       {t("chat.openDatabaseDevPanel")}
                                     </button>
-                                    <span
-                                      className={cn(
-                                        "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                                        getDatabaseStatusTone(database.database_status),
-                                      )}
-                                    >
-                                      {database.database_status ?? "UNKNOWN"}
-                                    </span>
-                                  </div>
+                                  )}
+                                  <span
+                                    className={cn(
+                                      "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                                      getDatabaseStatusTone(database.database_status),
+                                    )}
+                                  >
+                                    {database.database_status ?? "UNKNOWN"}
+                                  </span>
                                 </div>
                               </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </section>
               )}
-            </section>
-          </div>
+
+              {showHostList && (
+                <section
+                  className={cn(
+                    "flex min-h-0 flex-col overflow-hidden",
+                    showDatabaseList && "border-t",
+                    isMobile ? "bg-background" : "bg-card"
+                  )}
+                  style={{ flex: hostPanelCollapsed ? "0 0 auto" : "1 1 auto" }}
+                >
+                  <div className={cn(
+                    "flex shrink-0 items-center justify-between",
+                    isMobile ? "px-4 py-3" : "px-3 py-2"
+                  )}>
+                    <span className={cn(
+                      "font-semibold",
+                      isMobile ? "text-sm" : "text-sm"
+                    )}>
+                      {t("chat.hostList")}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={toggleHostPanel}
+                      title={hostPanelCollapsed ? t("chat.expandHostList") : t("chat.collapseHostList")}
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      {hostPanelCollapsed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </button>
+                  </div>
+
+                  {!hostPanelCollapsed && (
+                    <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-2">
+                      <div className="space-y-2">
+                        {hosts.length === 0 ? (
+                          <div className="rounded-xl border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
+                            {t("common.noData")}
+                          </div>
+                        ) : (
+                          hosts.map((host) => (
+                            <div
+                              key={host.host_name}
+                              className="cursor-pointer rounded-xl border bg-background/70 p-2 shadow-sm transition-all hover:border-primary/40 hover:bg-primary/5 hover:shadow-md active:scale-[0.99]"
+                              onClick={() => handleHostPromptInsert(host.host_name)}
+                              role="button"
+                              tabIndex={0}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-medium leading-snug">
+                                    {host.host_name}
+                                  </div>
+                                  <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                                    {host.ip}
+                                  </div>
+                                </div>
+                                <span
+                                  className={cn(
+                                    "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                                    getHostStatusTone(host.host_status),
+                                  )}
+                                >
+                                  {host.host_status ?? "unknown"}
+                                </span>
+                              </div>
+
+                              <div className="mt-2 space-y-1.5">
+                                {(host.databases ?? []).map((database, index) => (
+                                  <div
+                                    key={`${host.host_name}-${database.database_name}-${index}`}
+                                    className="cursor-pointer rounded-lg border bg-muted/30 px-2 py-1.5 transition-all hover:border-primary/35 hover:bg-primary/5 hover:shadow-sm active:scale-[0.99]"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      handleDatabasePromptInsert(
+                                        host.host_name,
+                                        database.sqlcl_saveconnname,
+                                        database.database_name,
+                                        database.database_status
+                                      );
+                                    }}
+                                    role="button"
+                                    tabIndex={0}
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="min-w-0 text-xs">
+                                        <div className="truncate font-medium leading-snug">
+                                          {database.database_name}
+                                        </div>
+                                        <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                                          {database.database_version || "-"}
+                                        </div>
+                                      </div>
+                                      <div className="flex shrink-0 items-center gap-1.5">
+                                        <span
+                                          className={cn(
+                                            "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                                            getDatabaseStatusTone(database.database_status),
+                                          )}
+                                        >
+                                          {database.database_status ?? "UNKNOWN"}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
+            </div>
+          )}
         </div>
 
         {/* FAB — mobile only, fixed bottom-right above the bottom tab bar */}

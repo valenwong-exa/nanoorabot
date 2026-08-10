@@ -10,6 +10,7 @@ New method added to AgentLoop:
 from __future__ import annotations
 
 import inspect
+from functools import wraps
 
 
 def apply() -> None:
@@ -28,9 +29,14 @@ def apply() -> None:
     # ------------------------------------------------------------------
     # __init__: add _mcp_server_stacks tracking dict
     # ------------------------------------------------------------------
+    @wraps(_orig_init)
     def _init_patched(self, *args, **kwargs):
         _orig_init(self, *args, **kwargs)
         self._mcp_server_stacks: dict[str, AsyncExitStack] = {}
+        if not hasattr(self, "_mcp_connected"):
+            self._mcp_connected = False
+        if not hasattr(self, "_mcp_stack"):
+            self._mcp_stack = None
 
     # ------------------------------------------------------------------
     # _connect_mcp: connect each enabled server into its own stack
@@ -38,7 +44,7 @@ def apply() -> None:
     async def _connect_mcp_patched(self) -> None:
         from webui.utils.webui_config import is_mcp_server_enabled
 
-        if self._mcp_connected or self._mcp_connecting or not self._mcp_servers:
+        if getattr(self, "_mcp_connected", False) or self._mcp_connecting or not self._mcp_servers:
             return
         self._mcp_connecting = True
         try:

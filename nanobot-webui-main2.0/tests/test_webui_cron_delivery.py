@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-NANOBOT_ROOT = Path(__file__).resolve().parents[2] / "nanobot-main2.2"
+NANOBOT_ROOT = Path(__file__).resolve().parents[2] / "nanobot-main3.0"
 if str(NANOBOT_ROOT) not in sys.path:
     sys.path.insert(0, str(NANOBOT_ROOT))
 

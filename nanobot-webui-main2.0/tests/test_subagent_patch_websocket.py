@@ -7,7 +7,7 @@ import pytest
 from webui.patches import subagent
 from webui.api.routes import ws
 
-NANOBOT_ROOT = Path(__file__).resolve().parents[2] / "nanobot-main2.2"
+NANOBOT_ROOT = Path(__file__).resolve().parents[2] / "nanobot-main3.0"
 if str(NANOBOT_ROOT) not in sys.path:
     sys.path.insert(0, str(NANOBOT_ROOT))
 def test_resolve_subagent_chat_key_keeps_websocket_session_scope() -> None:
@@ -53,9 +53,9 @@ async def test_apply_run_subagent_matches_current_manager_signature() -> None:
     subagent.apply()
     manager = object.__new__(SubagentManager)
     manager.workspace = Path("e:/nanobot-main")
-    manager.model = "test-model"
     manager.max_iterations = 3
     manager.max_tool_result_chars = 1024
+    manager.fail_on_tool_error = True
     manager._llm_wall_timeout_for_session = None
     manager._build_tools = lambda workspace=None, tools_config=None: "tools"
     manager._build_subagent_prompt = lambda workspace=None: "system prompt"
@@ -85,19 +85,20 @@ async def test_apply_run_subagent_matches_current_manager_signature() -> None:
 
     manager._announce_result = _fake_announce_result
 
+    runtime = SimpleNamespace()
     await manager._run_subagent(
         "task-1",
         "检查数据库字符集",
         "字符集检查",
         {"channel": "websocket", "chat_id": "web:42:abc12345", "session_key": "web:42:abc12345"},
         SimpleNamespace(phase="initializing", iteration=0, stop_reason=None, tool_events=[], usage={}),
+        runtime,
         "msg-1",
-        0.2,
         None,
     )
 
     assert len(captured_spec) == 1
-    assert captured_spec[0].temperature == 0.2
+    assert captured_spec[0].runtime is runtime
     assert captured_spec[0].workspace == Path("e:/nanobot-main")
     assert announced == [("字符集检查", "ok")]
 

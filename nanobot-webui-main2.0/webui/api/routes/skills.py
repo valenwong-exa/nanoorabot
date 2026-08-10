@@ -47,7 +47,7 @@ async def list_skills(
     result = []
     for s in all_skills:
         available, reason = _skill_available(loader, s["name"], s["path"])
-        description = loader._get_skill_description(s["name"])
+        description = loader.get_skill_description(s["name"])
         result.append(
             SkillInfo(
                 name=s["name"],

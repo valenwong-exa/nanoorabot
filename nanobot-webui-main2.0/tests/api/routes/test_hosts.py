@@ -137,6 +137,126 @@ def test_normalise_database_inventory_adds_unknown_status_when_missing() -> None
 
 
 @pytest.mark.asyncio
+async def test_put_host_inventory_persists_edited_lists_and_preserves_other_json_fields(
+    tmp_path: Path,
+) -> None:
+    workspace, inventory_path = _inventory_file(tmp_path)
+    inventory_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "database_inventory": [],
+                "host_inventory": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
+    svc = SimpleNamespace(
+        config=SimpleNamespace(
+            agents=SimpleNamespace(defaults=SimpleNamespace(workspace=str(workspace)))
+        )
+    )
+    body = hosts.HostInventoryUpdateRequest(
+        database_inventory=[
+            {
+                "sqlcl_saveconnname": "aidemo",
+                "description": "AI database",
+                "database_name": "AIDB",
+                "database_version": "23.26.1.0.0",
+                "database_status": "RUNNING",
+            }
+        ],
+        host_inventory=[
+            {
+                "host_name": "db1",
+                "description": "Primary database host",
+                "aliases": ["23ai", "23db"],
+                "ip": "192.168.56.118",
+                "ssh_key": "E:\\keys\\linux118.key",
+                "default_user": "oracle",
+                "privilege_escalation": "sudo su -",
+                "os_type": "Oracle Linux 8.10",
+                "databases": [{"database_name": "ORCLCDB"}],
+            }
+        ],
+    )
+
+    result = await hosts.put_host_inventory(request, body, {"username": "admin"}, svc)
+
+    saved = json.loads(inventory_path.read_text(encoding="utf-8"))
+    assert saved["schema_version"] == 2
+    assert saved["database_inventory"][0]["sqlcl_saveconnname"] == "aidemo"
+    assert saved["host_inventory"][0]["ssh_key"] == "E:\\keys\\linux118.key"
+    assert result["hosts"][0]["host_status"] == hosts.HOST_STATUS_UNKNOWN
+    assert result["hosts"][0]["databases"][0]["database_status"] == hosts.DATABASE_STATUS_UNKNOWN
+
+
+def test_validate_inventory_update_rejects_duplicate_connection_names() -> None:
+    body = hosts.HostInventoryUpdateRequest(
+        database_inventory=[
+            {"sqlcl_saveconnname": "aidemo", "database_name": "AIDB"},
+            {"sqlcl_saveconnname": "aidemo", "database_name": "AIDB2"},
+        ],
+        host_inventory=[],
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        hosts._validate_inventory_update(body)
+
+    assert exc_info.value.status_code == 400
+    assert "Duplicate sqlcl_saveconnname" in str(exc_info.value.detail)
+
+
+def test_preserve_inventory_runtime_fields_keeps_latest_probe_results() -> None:
+    payload = {
+        "database_inventory": [
+            {
+                "sqlcl_saveconnname": "aidemo",
+                "database_status": "RUNNING",
+                "last_checked_at": "2026-08-06T01:07:22+00:00",
+                "probe_output": "2026-08-06 01:07:21",
+            }
+        ],
+        "host_inventory": [
+            {
+                "host_name": "db1",
+                "host_status": "Running",
+                "databases": [{"database_name": "ORCLCDB", "database_status": "RUNNING"}],
+            }
+        ],
+    }
+    body = hosts.HostInventoryUpdateRequest(
+        database_inventory=[
+            {
+                "sqlcl_saveconnname": "aidemo",
+                "database_name": "AIDB",
+                "database_status": "INVALID",
+            }
+        ],
+        host_inventory=[
+            {
+                "host_name": "db1",
+                "ip": "192.168.56.118",
+                "ssh_key": "linux118.key",
+                "default_user": "oracle",
+                "aliases": [],
+                "host_status": "invalid",
+                "databases": [{"database_name": "ORCLCDB", "database_status": "INVALID"}],
+            }
+        ],
+    )
+
+    databases, host_inventory = hosts._preserve_inventory_runtime_fields(payload, body)
+
+    assert databases[0]["database_status"] == "RUNNING"
+    assert databases[0]["last_checked_at"] == "2026-08-06T01:07:22+00:00"
+    assert databases[0]["probe_output"] == "2026-08-06 01:07:21"
+    assert host_inventory[0]["host_status"] == "Running"
+    assert host_inventory[0]["databases"][0]["database_status"] == "RUNNING"
+
+
+@pytest.mark.asyncio
 async def test_probe_saved_connection_database_uses_first_available_probe_command(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -19,7 +19,7 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "nanobot-ai==0.2.0",
+    "nanobot-ai==0.3.0",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "PyJWT>=2.8.0",
@@ -41,6 +41,16 @@ dev = [
     "httpx",
     "pytest",
     "pytest-asyncio",
+]
+voice = [
+    "numpy==1.26.4",
+    "scipy==1.13.1",
+    "sounddevice",
+    "pynput",
+    "torch==2.3.0",
+    "torchaudio==2.3.0",
+    "modelscope",
+    "funasr>=1.1.3",
 ]
 
 [project.scripts]

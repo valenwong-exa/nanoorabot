@@ -29,8 +29,12 @@ This is a personal open-source project. It is not an official Oracle product, no
 <img width="2240" height="1030" alt="image" src="https://github.com/user-attachments/assets/1aadb792-e618-4c17-9237-6f4c5eb3c01b" />
 
 ## 安装文档 | Installation guide
-https://github.com/valenwong-exa/nanoorabot/blob/main/INSTALL.md
-https://github.com/valenwong-exa/nanoorabot/blob/main/nanoorabot_linux_install.md
+
+- [Windows](INSTALL.md)
+- [macOS](INSTALL_mac.md)
+- [OCI / Oracle Linux 8](INSTALL_oci_oraclelinux8.md)
+- [可选语音功能 / Optional voice support](INSTALL_voice.md)
+
 ## DBA起步手册 | Beginning Guide for DBA
 https://github.com/valenwong-exa/nanoorabot/blob/main/DBA_BEST_PRACTICE.md
 ## 核心特性 / Core Features

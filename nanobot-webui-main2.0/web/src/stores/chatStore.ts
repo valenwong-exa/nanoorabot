@@ -6,6 +6,7 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "tool" | "system" | "sub_tool";
   content: string;
+  hiddenPrompts?: string[];
   timestamp: string;
   mediaPaths?: string[];
   isStreaming?: boolean;
@@ -66,7 +67,7 @@ interface ChatState {
   updateDraftSnippet: (snippetId: string, text: string, sessionKey?: string) => void;
   removeDraftSnippet: (snippetId: string, sessionKey?: string) => void;
   clearDraftSnippets: (sessionKey?: string) => void;
-  setCurrentSession: (key: string | null) => void;
+  setCurrentSession: (key: string | null, options?: { preserveMessages?: boolean }) => void;
   addMessage: (msg: ChatMessage) => void;
   appendAssistantText: (id: string, text: string) => void;
   setStreaming: (id: string, isStreaming: boolean) => void;
@@ -170,11 +171,25 @@ export const useChatStore = create<ChatState>()(
             return state;
           }
           const current = state.draftSnippets[key] ?? [];
+          const currentDraftMessage = state.draftMessages[key] ?? "";
+          const shouldInsertSpacer = currentDraftMessage.length === 0;
           return {
             draftSnippets: {
               ...state.draftSnippets,
               [key]: [...current, { id: nanoid(), text: normalized, sourceType: "node_path" }],
             },
+            ...(shouldInsertSpacer
+              ? {
+                  draftMessages: {
+                    ...state.draftMessages,
+                    [key]: " ",
+                  },
+                  draftSelections: {
+                    ...state.draftSelections,
+                    [key]: { start: 1, end: 1 },
+                  },
+                }
+              : {}),
           };
         }),
 
@@ -232,11 +247,26 @@ export const useChatStore = create<ChatState>()(
             return state;
           }
           const current = state.draftSnippets[key] ?? [];
+          const nextSnippets = current.filter((snippet) => snippet.id !== snippetId);
+          const currentDraftMessage = state.draftMessages[key] ?? "";
+          const shouldClearSpacer = nextSnippets.length === 0 && currentDraftMessage === " ";
           return {
             draftSnippets: {
               ...state.draftSnippets,
-              [key]: current.filter((snippet) => snippet.id !== snippetId),
+              [key]: nextSnippets,
             },
+            ...(shouldClearSpacer
+              ? {
+                  draftMessages: {
+                    ...state.draftMessages,
+                    [key]: "",
+                  },
+                  draftSelections: {
+                    ...state.draftSelections,
+                    [key]: { start: 0, end: 0 },
+                  },
+                }
+              : {}),
           };
         }),
 
@@ -246,19 +276,45 @@ export const useChatStore = create<ChatState>()(
           if (!key) {
             return state;
           }
+          const currentDraftMessage = state.draftMessages[key] ?? "";
+          const shouldClearSpacer = currentDraftMessage === " ";
           return {
             draftSnippets: {
               ...state.draftSnippets,
               [key]: [],
             },
+            ...(shouldClearSpacer
+              ? {
+                  draftMessages: {
+                    ...state.draftMessages,
+                    [key]: "",
+                  },
+                  draftSelections: {
+                    ...state.draftSelections,
+                    [key]: { start: 0, end: 0 },
+                  },
+                }
+              : {}),
           };
         }),
 
-      setCurrentSession: (key) =>
-        set((state) => ({
-          currentSessionKey: key,
-          messages: state.currentSessionKey === key ? state.messages : [],
-        })),
+      setCurrentSession: (key, options) =>
+        set((state) => {
+          const currentKey = state.currentSessionKey;
+          const shouldPreserveMessages =
+            options?.preserveMessages === true &&
+            !!currentKey &&
+            !!key &&
+            currentKey !== key &&
+            state.messages.length > 0;
+          return {
+            currentSessionKey: key,
+            messages:
+              currentKey === key || shouldPreserveMessages
+                ? state.messages
+                : [],
+          };
+        }),
 
       addMessage: (msg) =>
         set((state) => ({ messages: [...state.messages, msg] })),

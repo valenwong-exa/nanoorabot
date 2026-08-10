@@ -7,6 +7,7 @@ Zero modifications to any nanobot source files.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import sys
 import time
 from pathlib import Path
@@ -41,6 +42,18 @@ def _normalize_agent_response_content(response: object) -> str | None:
     if isinstance(content, list):
         return "\n".join(str(item) for item in content if item is not None)
     return str(content)
+
+
+def _agentloop_supports_init_kwarg(agentloop_cls: type[object], kwarg_name: str) -> bool:
+    """Return whether the current AgentLoop.__init__ accepts a given keyword."""
+    try:
+        params = inspect.signature(agentloop_cls.__init__).parameters
+    except (TypeError, ValueError):
+        return False
+    return kwarg_name in params or any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in params.values()
+    )
 
 
 def _is_default_workspace(workspace: Path | None) -> bool:
@@ -125,6 +138,8 @@ async def main(
         ServiceContainer,
         start_api_server,
     )
+    from webui.oracle_memory_compat import OracleMemoryService
+    from webui.legacy_tool_policy_hook import create_legacy_tool_policy_hook_factory
     from webui.oracle_config import OracleConfigService
     from webui.patches.provider import make_provider_patched
     from webui.tool_policy import ToolPolicyService
@@ -169,18 +184,51 @@ async def main(
 
     cron_store_path = config.workspace_path / "cron" / "jobs.json"
     cron = CronService(cron_store_path)
-
-    agent = AgentLoop.from_config(
-        config,
-        bus=bus,
-        provider=provider,
-        cron_service=cron,
-        session_manager=session_manager,
-        tool_policy_path=tool_policy_file,
-        oracle_config_path=oracle_config_file,
-        oracle_audit_enabled=oracle_audit,
-        oracle_memory_enabled=oracle_memory,
+    oracle_memory_service = OracleMemoryService(
+        audit_enabled=oracle_audit,
+        memory_enabled=oracle_memory,
+        config_path=oracle_config_file,
     )
+
+    agent_common_kwargs = {
+        "provider": provider,
+        "cron_service": cron,
+        "session_manager": session_manager,
+    }
+    if _agentloop_supports_init_kwarg(AgentLoop, "hook_factories"):
+        agent_common_kwargs["hook_factories"] = [
+            create_legacy_tool_policy_hook_factory(tool_policy_file, session_manager),
+        ]
+
+    agent_legacy_kwargs = {
+        "tool_policy_path": tool_policy_file,
+        "oracle_config_path": oracle_config_file,
+        "oracle_audit_enabled": oracle_audit,
+        "oracle_memory_enabled": oracle_memory,
+    }
+    try:
+        agent = AgentLoop.from_config(
+            config,
+            bus=bus,
+            **agent_common_kwargs,
+            **agent_legacy_kwargs,
+        )
+    except TypeError as exc:
+        msg = str(exc)
+        if not any(key in msg for key in agent_legacy_kwargs):
+            raise
+        logger.warning(
+            "Current nanobot core does not support legacy AgentLoop kwargs: {}",
+            ", ".join(agent_legacy_kwargs.keys()),
+        )
+        agent = AgentLoop.from_config(
+            config,
+            bus=bus,
+            **agent_common_kwargs,
+        )
+    agent.oracle_memory = oracle_memory_service
+    agent.runner.oracle_memory_sink = oracle_memory_service
+    agent.subagents.runner.oracle_memory_sink = oracle_memory_service
 
     # ------------------------------------------------------------------ cron
     async def on_cron_job(job: CronJob) -> str | None:
@@ -372,6 +420,7 @@ async def main(
             logger.info("Shutting down…")
         finally:
             await agent.close_mcp()
+            await oracle_memory_service.close()
             if not webui_only:
                 heartbeat.stop()
             cron.stop()

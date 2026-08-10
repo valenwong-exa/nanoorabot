@@ -1,0 +1,199 @@
+SenseVoice 麦克风识别脚本安装说明
+================================
+
+适用目标
+--------
+本说明用于在另一台 Windows 机器上运行 `mic_test.py`。
+
+建议同时复制以下文件到同一个目录：
+- `mic_test.py`
+- `model.py`
+- `requirements.txt`
+- `install.txt`
+
+如果缺少 `model.py`，脚本中的 `remote_code="./model.py"` 会导致加载失败。
+
+
+一、基础前置条件
+----------------
+1. 操作系统
+- Windows 10 或 Windows 11
+
+2. Python
+- 推荐 Python 3.10 或 3.11
+- Python 3.12 可能可用，但兼容性不如 3.10/3.11 稳定
+
+3. GPU
+- 如果希望使用 NVIDIA GPU，请先安装显卡驱动
+- 安装完成后在终端执行：
+
+  nvidia-smi
+
+- 如果能正常看到显卡信息，说明驱动可用
+
+4. 麦克风权限
+- 确保系统允许终端或 Python 访问麦克风
+
+5. Microsoft Visual C++ Redistributable
+- Windows 上建议安装最新版 Microsoft Visual C++ Redistributable
+- 如果 `torch` 或 `torchaudio` 导入时报 DLL 或 WinError 错误，这一步很重要
+
+
+二、创建独立 Python 环境
+------------------------
+建议使用虚拟环境，避免和机器上已有 Python 包冲突。
+
+在脚本所在目录打开 PowerShell，执行：
+
+  python -m venv .venv
+  .\.venv\Scripts\Activate.ps1
+
+升级安装工具：
+
+  python -m pip install --upgrade pip setuptools wheel
+
+
+三、安装 PyTorch
+----------------
+注意：`torch` 和 `torchaudio` 版本必须匹配。
+
+方案 A：安装 GPU 版
+------------------
+如果机器有 NVIDIA GPU，推荐先安装 GPU 版 PyTorch。
+
+以 CUDA 12.1 为例：
+
+  pip uninstall -y torch torchaudio
+  pip install torch==2.3.0 torchaudio==2.3.0 --index-url https://download.pytorch.org/whl/cu121
+
+安装完成后验证：
+
+  python -c "import torch, torchaudio; print(torch.__version__); print(torchaudio.__version__); print(torch.cuda.is_available())"
+
+如果最后输出 `True`，说明 GPU 可用。
+
+如果你机器上的 CUDA 驱动环境不同，请根据实际情况改成对应版本。
+
+
+方案 B：安装 CPU 版
+------------------
+如果没有 NVIDIA GPU，或只想先验证功能，可以安装 CPU 版：
+
+  pip uninstall -y torch torchaudio
+  pip install torch==2.3.0 torchaudio==2.3.0 -i https://mirrors.aliyun.com/pypi/simple/
+
+
+四、安装其余依赖
+----------------
+在脚本目录执行：
+
+  pip install -r requirements.txt
+
+当前依赖包含：
+- `funasr`
+- `modelscope`
+- `sounddevice`
+- `pynput`
+- 以及相关基础包
+
+
+五、可选安装 ffmpeg
+-------------------
+`mic_test.py` 当前核心流程不依赖 ffmpeg，也可以运行。
+但是如果你不想看到 ffmpeg 警告，或者未来需要处理更多音频格式，可以安装 ffmpeg。
+
+Windows 安装方法任选一种：
+
+方法 1：使用 winget
+
+  winget install Gyan.FFmpeg
+
+方法 2：手动下载安装
+- 下载 ffmpeg Windows 版本
+- 解压后把 `bin` 目录加入系统 `PATH`
+
+安装完成后验证：
+
+  ffmpeg -version
+
+
+六、验证音频设备
+----------------
+先确认麦克风能被识别：
+
+  python mic_test.py --list-devices
+
+如果能看到设备列表，说明 `sounddevice` 和系统音频接口基本正常。
+
+
+七、运行脚本
+------------
+GPU 模式：
+
+  python mic_test.py
+
+CPU 模式：
+
+  python mic_test.py --device cpu
+
+运行后会提示：
+- 等待左 Ctrl 按下
+- 按住左 Ctrl 开始说话
+- 松开左 Ctrl 停止录音
+- 自动转成文字并打印
+
+
+八、常见问题
+------------
+1. 报错：`OSError: [WinError 127] 找不到指定的程序`
+- 通常是 `torch` 和 `torchaudio` 版本不匹配
+- 重新按上面的 PyTorch 安装步骤安装
+- 同时确认已安装 Visual C++ Redistributable
+
+2. 报错：无法导入 `pynput`
+- 执行：
+
+  pip install pynput -i https://mirrors.aliyun.com/pypi/simple/
+
+3. 报错：没有采集到音频数据
+- 检查系统麦克风权限
+- 先执行 `python mic_test.py --list-devices`
+- 然后用 `--input-device` 指定正确设备编号
+
+4. 识别阶段很慢
+- 第一次运行会下载模型到本地缓存，通常会慢一些
+- 模型默认下载目录类似：
+
+  C:\Users\你的用户名\.cache\modelscope\hub\models\iic\SenseVoiceSmall
+
+5. 报错：找不到 `model.py`
+- 确保 `mic_test.py` 和 `model.py` 在同一个目录
+
+
+九、推荐拷贝清单
+----------------
+如果你要把这个功能迁移到另一台机器，建议最少复制：
+- `mic_test.py`
+- `model.py`
+- `requirements.txt`
+- `install.txt`
+
+
+十、最小自检命令
+----------------
+1. 检查 Python：
+
+  python --version
+
+2. 检查 PyTorch：
+
+  python -c "import torch, torchaudio; print(torch.__version__, torchaudio.__version__, torch.cuda.is_available())"
+
+3. 检查麦克风：
+
+  python mic_test.py --list-devices
+
+4. 正式运行：
+
+  python mic_test.py
+

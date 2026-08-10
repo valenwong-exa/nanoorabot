@@ -315,6 +315,84 @@ def webui_restart(
     )
 
 
+@webui_app.command("voice")
+def webui_voice(
+    list_devices: bool = typer.Option(
+        False,
+        "--list-devices",
+        help="List available microphone devices using the current Python environment.",
+    ),
+    sensevoice_dir: Optional[str] = typer.Option(
+        None,
+        "--sensevoice-dir",
+        help="Path to the external SenseVoice-main workspace. Defaults to ../SenseVoice-main.",
+    ),
+    duration: float = typer.Option(
+        30.0,
+        "--duration",
+        help="Maximum recording duration in seconds while holding Ctrl+Z.",
+    ),
+    samplerate: int = typer.Option(
+        16000,
+        "--samplerate",
+        help="Recording sample rate passed to mic_test.py.",
+    ),
+    language: str = typer.Option(
+        "zh",
+        "--language",
+        help="Recognition language passed to mic_test.py.",
+    ),
+    device: str = typer.Option(
+        "cuda:0",
+        "--device",
+        help="Inference device passed to mic_test.py, such as cuda:0 or cpu.",
+    ),
+    input_device: Optional[int] = typer.Option(
+        None,
+        "--input-device",
+        help="Optional microphone device index.",
+    ),
+    keep_audio: bool = typer.Option(
+        False,
+        "--keep-audio",
+        help="Keep the recorded wav file for troubleshooting.",
+    ),
+) -> None:
+    """Run the external SenseVoice microphone tool from the WebUI environment."""
+
+    from webui.voice import (
+        SenseVoiceMicOptions,
+        SenseVoiceService,
+        get_voice_runtime_status,
+    )
+
+    status_payload = get_voice_runtime_status(sensevoice_dir=sensevoice_dir)
+    if not status_payload["ok"]:
+        typer.echo(f"[voice] {status_payload['reason']}")
+        typer.echo("[voice] 请先按需安装 voice 依赖，例如: pip install \"nanobot-webui[voice]\"")
+        raise typer.Exit(1)
+
+    service = SenseVoiceService(sensevoice_dir=sensevoice_dir)
+    typer.echo(f"[voice] SenseVoice 目录: {service.paths.root_dir}")
+    typer.echo(f"[voice] Python 环境: {service.python_executable}")
+
+    if list_devices:
+        typer.echo(service.list_devices_text(), nl=False)
+        return
+
+    exit_code = service.run_microphone_capture(
+        SenseVoiceMicOptions(
+            duration=duration,
+            samplerate=samplerate,
+            language=language,
+            device=device,
+            input_device=input_device,
+            keep_audio=keep_audio,
+        )
+    )
+    raise typer.Exit(exit_code)
+
+
 # ── Override `channels login` with PR #2348 generic behavior ─────────────────
 # The installed nanobot only supports WhatsApp login; replace with a version
 # that accepts a channel name and calls channel.login().

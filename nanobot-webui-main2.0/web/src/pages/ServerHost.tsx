@@ -13,13 +13,17 @@ import {
   useHostInventory,
   useHostInventoryRefreshConfig,
   useRefreshHostInventory,
+  useUpdateHostInventory,
   useUpdateHostInventoryRefreshConfig,
 } from "../hooks/useHostInventory";
-import { CheckCircle2, Database, HardDrive, LoaderCircle, RefreshCw, Server, ShieldAlert } from "lucide-react";
+import { CheckCircle2, Database, HardDrive, LoaderCircle, RefreshCw, Server, Settings2, ShieldAlert } from "lucide-react";
+import ServerHostEdit from "./ServerHostEdit";
 
 const DEFAULT_AUTO_REFRESH_INTERVAL_MINUTES = 1;
 const MIN_AUTO_REFRESH_INTERVAL_MINUTES = 1;
 const MAX_AUTO_REFRESH_INTERVAL_MINUTES = 1440;
+const CHAT_DATABASE_LIST_VISIBLE_STORAGE_KEY = "nanobot-chat-database-list-visible";
+const CHAT_HOST_LIST_VISIBLE_STORAGE_KEY = "nanobot-chat-host-list-visible";
 
 function getHostStatusTone(status: string) {
   switch (status) {
@@ -68,15 +72,31 @@ export default function ServerHost() {
   const { data, isLoading } = useHostInventory();
   const refreshConfigQuery = useHostInventoryRefreshConfig();
   const refreshInventory = useRefreshHostInventory();
+  const updateInventory = useUpdateHostInventory();
   const updateRefreshConfig = useUpdateHostInventoryRefreshConfig();
-  const refreshedInventoryPathRef = useRef<string | null>(null);
   const lastSuccessAtRef = useRef<string | null>(null);
   const [autoRefreshIntervalDraft, setAutoRefreshIntervalDraft] = useState<string>(
     String(DEFAULT_AUTO_REFRESH_INTERVAL_MINUTES),
   );
+  const [maintenanceOpen, setMaintenanceOpen] = useState(false);
+  const [showChatDatabaseList, setShowChatDatabaseList] = useState<boolean>(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    return window.localStorage.getItem(CHAT_DATABASE_LIST_VISIBLE_STORAGE_KEY) !== "false";
+  });
+  const [showChatHostList, setShowChatHostList] = useState<boolean>(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    return window.localStorage.getItem(CHAT_HOST_LIST_VISIBLE_STORAGE_KEY) !== "false";
+  });
 
   const monitoredDatabases = data?.database_inventory ?? [];
   const hosts = data?.hosts ?? [];
+  const hasHosts = hosts.length > 0;
+  const hasMonitoredDatabases = monitoredDatabases.length > 0;
+  const hasInventoryContent = hasHosts || hasMonitoredDatabases;
   const runningHosts = hosts.filter((host) => host.host_status === "Running").length;
   const attentionHosts = hosts.filter((host) => host.host_status && host.host_status !== "Running").length;
   const hostDatabaseCount = hosts.reduce((sum, host) => sum + (host.databases?.length ?? 0), 0);
@@ -106,7 +126,6 @@ export default function ServerHost() {
     }
     refreshInventory.mutate(undefined, {
       onSuccess: (nextData) => {
-        refreshedInventoryPathRef.current = nextData.inventory_path;
         queryClient.setQueryData(["host-inventory"], nextData);
         void queryClient.invalidateQueries({ queryKey: ["host-inventory", "refresh-config"] });
       },
@@ -137,19 +156,12 @@ export default function ServerHost() {
   }, [queryClient, refreshConfigQuery.data?.lastSuccessAt]);
 
   useEffect(() => {
-    if (isLoading || !data?.exists || !data.inventory_path) {
-      return;
-    }
-    if (refreshInventory.isPending) {
-      return;
-    }
-    if (refreshedInventoryPathRef.current === data.inventory_path) {
-      return;
-    }
+    window.localStorage.setItem(CHAT_DATABASE_LIST_VISIBLE_STORAGE_KEY, showChatDatabaseList ? "true" : "false");
+  }, [showChatDatabaseList]);
 
-    refreshedInventoryPathRef.current = data.inventory_path;
-    handleRefresh();
-  }, [data?.exists, data?.inventory_path, isLoading, queryClient, refreshInventory]);
+  useEffect(() => {
+    window.localStorage.setItem(CHAT_HOST_LIST_VISIBLE_STORAGE_KEY, showChatHostList ? "true" : "false");
+  }, [showChatHostList]);
 
   const handleUpdateAutoRefreshConfig = async (patch: {
     enabled?: boolean;
@@ -286,11 +298,42 @@ export default function ServerHost() {
                 <span className="text-sm text-muted-foreground">{t("host.autoRefresh.intervalUnit")}</span>
               </div>
             </div>
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2">
+              <Label className="text-sm">{t("host.chatPanels.label")}</Label>
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={showChatHostList}
+                  onChange={(event) => setShowChatHostList(event.target.checked)}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <span>{t("chat.hostList")}</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={showChatDatabaseList}
+                  onChange={(event) => setShowChatDatabaseList(event.target.checked)}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <span>{t("chat.databaseList")}</span>
+              </label>
+            </div>
             {data?.exists && (
               <Badge variant="secondary" className="max-w-full truncate">
                 {data.workspace}
               </Badge>
             )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setMaintenanceOpen(true)}
+              disabled={!data?.exists}
+            >
+              <Settings2 />
+              {t("host.maintenance.button")}
+            </Button>
             <Button
               type="button"
               variant="outline"
@@ -310,33 +353,37 @@ export default function ServerHost() {
                 <Skeleton key={i} className="h-[280px] w-full" />
               ))}
             </div>
-          ) : !data?.exists || hosts.length === 0 ? (
+          ) : !data?.exists || !hasInventoryContent ? (
             <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
               {t("host.empty")}
             </div>
           ) : (
             <div className="space-y-4">
-              {refreshInProgress && (
-                <div className="overflow-hidden rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-950/30">
-                  <div className="h-1 w-full animate-pulse bg-blue-500" />
-                  <div className="flex items-center gap-2 px-4 py-3 text-sm text-blue-700 dark:text-blue-200">
-                    <LoaderCircle className="h-4 w-4 animate-spin" />
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
+                {refreshInProgress && (
+                  <span className="inline-flex shrink-0 items-center gap-1.5 text-blue-700 dark:text-blue-200">
+                    <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
                     <span>{t("host.refreshing")}</span>
-                  </div>
-                </div>
-              )}
-              <div className="rounded-lg border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
-                <span className="font-medium">{t("host.inventorySource")}:</span> {data.inventory_path}
-              </div>
-              <div className="rounded-lg border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
-                <span className="font-medium">{t("host.autoRefresh.statusLabel")}:</span>{" "}
-                {autoRefreshEnabled
-                  ? t("host.autoRefresh.statusEnabled", { minutes: autoRefreshIntervalValue })
-                  : t("host.autoRefresh.statusDisabled")}
-              </div>
-              <div className="rounded-lg border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
-                <span className="font-medium">{t("host.autoRefresh.lastSuccessLabel")}:</span>{" "}
-                {formatDateTime(refreshConfigQuery.data?.lastSuccessAt)}
+                  </span>
+                )}
+                <span className="inline-flex min-w-0 max-w-full flex-1 items-center gap-1">
+                  <span className="shrink-0 font-medium">{t("host.inventorySource")}:</span>
+                  <span className="truncate" title={data.inventory_path}>
+                    {data.inventory_path}
+                  </span>
+                </span>
+                <span className="inline-flex shrink-0 items-center gap-1">
+                  <span className="font-medium">{t("host.autoRefresh.statusLabel")}:</span>
+                  <span>
+                    {autoRefreshEnabled
+                      ? t("host.autoRefresh.statusEnabled", { minutes: autoRefreshIntervalValue })
+                      : t("host.autoRefresh.statusDisabled")}
+                  </span>
+                </span>
+                <span className="inline-flex shrink-0 items-center gap-1">
+                  <span className="font-medium">{t("host.autoRefresh.lastSuccessLabel")}:</span>
+                  <span>{formatDateTime(refreshConfigQuery.data?.lastSuccessAt)}</span>
+                </span>
               </div>
               {refreshConfigQuery.data?.lastError ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
@@ -344,6 +391,7 @@ export default function ServerHost() {
                   {refreshConfigQuery.data.lastError}
                 </div>
               ) : null}
+              {hasMonitoredDatabases ? (
               <div className="rounded-xl border bg-background/70 p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex items-center gap-3">
@@ -369,77 +417,76 @@ export default function ServerHost() {
                 </div>
 
                 <div className="mt-4">
-                  {monitoredDatabases.length > 0 ? (
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                      {monitoredDatabases.map((database, index) => {
-                        const databaseStatus = database.database_status ?? "UNKNOWN";
-                        return (
-                          <Card
-                            key={`${database.sqlcl_saveconnname ?? database.database_name ?? "database"}-${index}`}
-                            className="overflow-hidden border-border/70 bg-card/90"
-                          >
-                            <CardContent className="p-4">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/10">
-                                      <Database className="h-4 w-4 text-violet-500" />
-                                    </div>
-                                    <div className="min-w-0">
-                                      <h3 className="truncate text-base font-semibold">{database.database_name ?? "-"}</h3>
-                                      <p className="truncate text-xs text-muted-foreground">
-                                        {database.sqlcl_saveconnname || "-"}
-                                      </p>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    {monitoredDatabases.map((database, index) => {
+                      const databaseStatus = database.database_status ?? "UNKNOWN";
+                      return (
+                        <Card
+                          key={`${database.sqlcl_saveconnname ?? database.database_name ?? "database"}-${index}`}
+                          className="overflow-hidden border-border/70 bg-card/90"
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/10">
+                                    <Database className="h-4 w-4 text-violet-500" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <h3 className="truncate text-base font-semibold">{database.database_name ?? "-"}</h3>
+                                    <div className="mt-1">
+                                      <span className="inline-flex max-w-full items-center rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-sm font-semibold text-sky-700 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-300">
+                                        <span className="truncate">{database.sqlcl_saveconnname || "-"}</span>
+                                      </span>
                                     </div>
                                   </div>
                                 </div>
-                                <Badge className={getDatabaseStatusTone(databaseStatus)}>
-                                  {databaseStatus}
-                                </Badge>
                               </div>
+                              <Badge className={getDatabaseStatusTone(databaseStatus)}>
+                                {databaseStatus}
+                              </Badge>
+                            </div>
 
-                              <div className="mt-4 space-y-2 text-xs text-muted-foreground">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span>{t("common.status")}</span>
-                                  <span className="font-medium text-foreground">{databaseStatus}</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span>SQLcl</span>
-                                  <span className="font-medium text-foreground">
-                                    {database.sqlcl_saveconnname || "-"}
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span>{t("host.database.version")}</span>
-                                  <span className="font-medium text-foreground">
-                                    {database.database_version || "-"}
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span>{t("host.monitored.lastChecked")}</span>
-                                  <span className="font-medium text-foreground">
-                                    {formatDateTime(database.last_checked_at)}
-                                  </span>
-                                </div>
-                                <div className="flex items-start justify-between gap-2">
-                                  <span>{t("host.monitored.lastResponse")}</span>
-                                  <span className="max-w-[65%] break-all text-right font-medium text-foreground">
-                                    {database.probe_output || "-"}
-                                  </span>
-                                </div>
+                            <div className="mt-4 space-y-2 text-xs text-muted-foreground">
+                              <div className="flex items-center justify-between gap-2">
+                                <span>{t("common.status")}</span>
+                                <span className="font-medium text-foreground">{databaseStatus}</span>
                               </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
-                      {t("host.monitored.empty")}
-                    </div>
-                  )}
+                              <div className="flex items-center justify-between gap-2">
+                                <span>SQLcl</span>
+                                <span className="font-semibold text-sky-700 dark:text-sky-300">
+                                  {database.sqlcl_saveconnname || "-"}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span>{t("host.database.version")}</span>
+                                <span className="font-medium text-foreground">
+                                  {database.database_version || "-"}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span>{t("host.monitored.lastChecked")}</span>
+                                <span className="font-medium text-foreground">
+                                  {formatDateTime(database.last_checked_at)}
+                                </span>
+                              </div>
+                              <div className="flex items-start justify-between gap-2">
+                                <span>{t("host.monitored.lastResponse")}</span>
+                                <span className="max-w-[65%] break-all text-right font-medium text-foreground">
+                                  {database.probe_output || "-"}
+                                </span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
+              ) : null}
+              {hasHosts ? (
+              <>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-semibold">{t("host.title")}</h3>
@@ -594,10 +641,26 @@ export default function ServerHost() {
                   );
                 })}
               </div>
+              </>
+              ) : null}
             </div>
           )}
         </CardContent>
       </Card>
+      {maintenanceOpen ? (
+        <ServerHostEdit
+          open
+          onOpenChange={setMaintenanceOpen}
+          inventory={data}
+          isSaving={updateInventory.isPending}
+          isRefreshInProgress={refreshInProgress}
+          onSave={async (payload) => {
+            const saved = await updateInventory.mutateAsync(payload);
+            queryClient.setQueryData(["host-inventory"], saved);
+            return saved;
+          }}
+        />
+      ) : null}
     </div>
   );
 }

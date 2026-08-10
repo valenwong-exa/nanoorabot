@@ -7,6 +7,7 @@ import { ChatWebSocket, type WsMessage } from "../../lib/ws";
 import { MessageBubble, shouldShowArtifactPreview } from "./MessageBubble";
 import { ChatInput } from "./ChatInput";
 import { useRevokeMessage } from "../../hooks/useSessions";
+import { extractHiddenPromptSegments } from "../../lib/hiddenPrompts";
 
 export function ChatWindow() {
   const { t } = useTranslation();
@@ -81,7 +82,7 @@ export function ChatWindow() {
 
       if (msg.type === "session_info") {
         if (msg.session_key && msg.session_key !== currentKey) {
-          setCurrentSession(msg.session_key);
+          setCurrentSession(msg.session_key, { preserveMessages: true });
         }
       } else if (msg.type === "progress") {
         // Update per-session progress
@@ -180,15 +181,22 @@ export function ChatWindow() {
   }, [handleWsMessage]);
 
   const handleSend = useCallback(
-    (content: string, media?: string[]) => {
+    (content: string, media?: string[], options?: { displayContent?: string; hiddenPrompts?: string[] }) => {
       if (!wsRef.current?.isConnected) {
         wsRef.current?.connect();
       }
-      const displayContent = content || (media && media.length > 0 ? "[Image]" : "");
+      const hiddenPrompts = options?.hiddenPrompts ?? [];
+      const parsedDisplay = options?.displayContent !== undefined
+        ? {
+            prompts: hiddenPrompts,
+            content: options.displayContent,
+          }
+        : extractHiddenPromptSegments(content, hiddenPrompts);
       addMessage({
         id: nanoid(),
         role: "user",
-        content: displayContent,
+        content: parsedDisplay.content || (media && media.length > 0 ? "[Image]" : ""),
+        hiddenPrompts: parsedDisplay.prompts,
         timestamp: new Date().toISOString(),
         mediaPaths: media && media.length > 0 ? media : undefined,
       });

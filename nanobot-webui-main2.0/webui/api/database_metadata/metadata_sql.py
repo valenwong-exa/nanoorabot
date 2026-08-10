@@ -16,6 +16,8 @@ ICON_MAP: dict[str, str] = {
     "connection_info": "connected_database.png",
     "connected_schema": "schema.png",
     "dbops_root": "scheduler_job.png",
+    "selectai_root": "schema.png",
+    "selectai_profile": "users.png",
     "schemas_root": "schema.png",
     "schema": "schema.png",
     "users_root": "users.png",
@@ -108,6 +110,7 @@ USER_FOLDER_SPECS: list[dict[str, str]] = [
 
 REFRESHABLE_NODE_TYPES = {
     "dbops_root",
+    "selectai_root",
     "schemas_root",
     "schema",
     "users_root",
@@ -217,6 +220,53 @@ def build_all_users_sql() -> str:
                )
         from all_users
         """
+    )
+
+
+def build_selectai_profiles_sql() -> str:
+    return (
+        "\n".join(
+            [
+                "set heading off",
+                "set feedback off",
+                "set pagesize 0",
+                "set linesize 32767",
+                "set trimspool on",
+                "set serveroutput on size unlimited",
+                "set long 10000000",
+                "set longchunksize 10000000",
+                "declare",
+                "    l_json clob := '[]';",
+                "begin",
+                "    begin",
+                "        execute immediate q'~",
+                "            select coalesce(",
+                "                     json_serialize(",
+                "                       json_arrayagg(",
+                "                         json_object('name' value profile_name)",
+                "                         order by profile_name",
+                "                         returning clob",
+                "                       ) returning clob",
+                "                     ),",
+                "                     to_clob('[]')",
+                "                   )",
+                "            from user_cloud_ai_profiles",
+                "        ~' into l_json;",
+                "    exception",
+                "        when others then",
+                "            if sqlcode = -942 then",
+                "                l_json := '[]';",
+                "            else",
+                "                raise;",
+                "            end if;",
+                "    end;",
+                "    dbms_output.put_line(l_json);",
+                "end;",
+                "/",
+                "exit",
+                "",
+            ]
+        )
     )
 
 
