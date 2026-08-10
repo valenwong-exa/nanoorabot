@@ -73,6 +73,8 @@
 pip install nanobot-webui
 ```
 
+默认安装只包含 `nanobot` 与 `WebUI` 的必要依赖，**不包含语音识别相关依赖**。需要启用语音功能时，再按需安装 voice 支持即可，见 `INSTALL_voice.md`。
+
 > **从旧版本升级？** 请先卸载旧版本以避免冲突：
 > ```bash
 > pip uninstall -y nanobot-webui nanobot
@@ -101,6 +103,8 @@ nanobot webui start -d
 ```bash
 uv tool install nanobot-webui
 ```
+
+默认安装同样**不包含语音识别相关依赖**。如需后续启用语音功能，请参考 `INSTALL_voice.md` 单独补装。
 
 > **升级？**
 > ```bash

@@ -4,7 +4,7 @@
 
 新增一个“主机”页面，用于展示当前 workspace 中维护的主机清单。
 该页面当前定位为“主机清单 + 连通性检查”页面。
-它会展示 inventory 中配置的 Linux 主机，并在页面打开时自动执行一次真实连通性探测。
+它会展示 inventory 中配置的 Linux 主机；真实连通性探测由手工刷新或已启用的后台自动轮询触发。
 数据库部分已接入 Oracle 实例状态检查，当前会在 Linux 主机上以 `oracle` 用户执行 `sqlplus` 查询实例状态。
 页面主要用于：
 
@@ -108,7 +108,7 @@ POST /api/hosts/inventory/refresh
 
 - 刷新完成后，后端会把每台主机的 `host_status` 写回 `skills/linux-inventory/linux-inventory.json`
 - 刷新完成后，后端也会把每个数据库对象的 `database_status` 写回 inventory 文件
-- 因此页面下次打开时，可以先显示“上一次检查结果”，再执行新一轮刷新
+- 因此页面下次打开时，可以先显示“上一次检查结果”，再按配置决定是否由后台轮询刷新
 
 该接口已注册到：
 
@@ -151,7 +151,8 @@ E:\nanobot-main\nanobot-webui-main\web\src\hooks\useHostInventory.ts
 - 页面每次重新进入都会重新读取 inventory
 - 不会长期使用缓存结果
 - 页面首次进入时先显示 inventory 中已有状态
-- 页面进入后会自动触发一次真实检查
+- 页面进入后不会绕过自动轮询开关触发检查
+- 关闭自动轮询时，只能通过“刷新”按钮手工触发检查
 - 主机状态和数据库状态会在同一次刷新中一起更新
 
 
@@ -253,7 +254,7 @@ E:\nanobot-main\nanobot-webui-main\web\src\pages\ServerHost.tsx
 页面行为：
 
 - 页面打开时先显示 inventory 中上一次保存的状态
-- 随后自动触发刷新
+- 如果自动轮询已启用，后端定时任务会继续刷新；关闭时保持当前缓存状态
 - 刷新完成后 UI 和 inventory 同步更新为最新状态
 
 
@@ -345,7 +346,7 @@ E:\nanobot-main\nanobot-webui-main\web\src\pages\ServerHost.tsx
 - 页面打开时动态读取当前 workspace 的 inventory
 - 页面打开时先显示上一次保存的 `host_status`
 - 页面打开时先显示上一次保存的 `database_status`
-- 页面进入后自动执行一次真实主机检查
+- 页面不会在进入时无条件执行检查，刷新行为受自动轮询开关或手工按钮控制
 - 支持手工点击“刷新”按钮再次检查
 - 检查结果会回写 inventory 中的 `host_status`
 - 检查结果会回写 inventory 中的 `database_status`

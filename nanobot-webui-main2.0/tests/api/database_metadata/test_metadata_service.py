@@ -47,8 +47,9 @@ def test_open_connection_builds_json_cache_and_reuses_it(tmp_path: Path, monkeyp
     assert cache_payload["connection"]["connected_schema"] == "VALEN"
     connection_node = find_node_by_id(result["tree"], "conn:aidemo-test")
     assert connection_node is not None
-    assert [child["label"] for child in connection_node["children"][2:4]] == [
+    assert [child["label"] for child in connection_node["children"][2:5]] == [
         "DBOps",
+        "SelectAI",
         "Schemas",
     ]
     dbops_node = find_node_by_id(result["tree"], "dbops")
@@ -75,6 +76,137 @@ def test_open_connection_builds_json_cache_and_reuses_it(tmp_path: Path, monkeyp
     )
     assert cached["fromCache"] is True
     assert probe_calls == ["aidemo"]
+
+
+def test_open_connection_upgrades_cached_connection_children_with_selectai(tmp_path: Path, monkeypatch) -> None:
+    service = _service(tmp_path)
+
+    monkeypatch.setattr(
+        service,
+        "_fetch_connection_info",
+        lambda _name: {
+            "username": "VALEN",
+            "connected_schema": "VALEN",
+            "server_host": "192.168.56.101",
+            "service_name": "aidemo_pdb",
+            "db_name": "AIDEMO",
+        },
+    )
+    monkeypatch.setattr(service, "_fetch_all_users", lambda _name: ["AGENT", "VALEN"])
+    monkeypatch.setattr(service, "_probe_connection", lambda _name: None)
+
+    service.open_connection(
+        connection_id="aidemo-test",
+        sqlcl_connection_name="aidemo",
+        display_name="aidemo-test",
+    )
+    cache_payload = read_cache("aidemo-test", tmp_path)
+    assert cache_payload is not None
+    connection_node = find_node_by_id(cache_payload["tree"], "conn:aidemo-test")
+    assert connection_node is not None
+    connection_node["children"] = [
+        child for child in connection_node["children"] if child["id"] != "selectai"
+    ]
+    write_cache("aidemo-test", cache_payload, tmp_path)
+
+    result = service.open_connection(
+        connection_id="aidemo-test",
+        sqlcl_connection_name="aidemo",
+        display_name="aidemo-test",
+    )
+
+    upgraded_connection_node = find_node_by_id(result["tree"], "conn:aidemo-test")
+    assert upgraded_connection_node is not None
+    assert [child["label"] for child in upgraded_connection_node["children"][2:5]] == [
+        "DBOps",
+        "SelectAI",
+        "Schemas",
+    ]
+    assert find_node_by_id(result["tree"], "selectai") is not None
+
+
+def test_load_node_populates_selectai_profiles(tmp_path: Path, monkeypatch) -> None:
+    service = _service(tmp_path)
+
+    monkeypatch.setattr(
+        service,
+        "_fetch_connection_info",
+        lambda _name: {
+            "username": "VALEN",
+            "connected_schema": "VALEN",
+            "server_host": "192.168.56.101",
+            "service_name": "aidemo_pdb",
+            "db_name": "AIDEMO",
+        },
+    )
+    monkeypatch.setattr(service, "_fetch_all_users", lambda _name: ["AGENT", "VALEN"])
+    monkeypatch.setattr(service, "_fetch_selectai_profile_names", lambda _name: ["DEFAULT_PROFILE", "HR_ASSISTANT"])
+
+    service.open_connection(
+        connection_id="aidemo-test",
+        sqlcl_connection_name="aidemo",
+        display_name="aidemo-test",
+    )
+
+    result = service.load_node(
+        connection_id="aidemo-test",
+        sqlcl_connection_name="aidemo",
+        node_id="selectai",
+        node_type="selectai_root",
+    )
+
+    assert result["success"] is True
+    assert result["fromCache"] is False
+    assert result["node"]["loaded"] is True
+    assert [child["label"] for child in result["node"]["children"]] == ["DEFAULT_PROFILE", "HR_ASSISTANT"]
+    assert [child["type"] for child in result["node"]["children"]] == ["selectai_profile", "selectai_profile"]
+
+
+def test_load_node_keeps_selectai_empty_when_view_missing(tmp_path: Path, monkeypatch) -> None:
+    service = _service(tmp_path)
+
+    monkeypatch.setattr(
+        service,
+        "_fetch_connection_info",
+        lambda _name: {
+            "username": "VALEN",
+            "connected_schema": "VALEN",
+            "server_host": "192.168.56.101",
+            "service_name": "aidemo_pdb",
+            "db_name": "AIDEMO",
+        },
+    )
+    monkeypatch.setattr(service, "_fetch_all_users", lambda _name: ["AGENT", "VALEN"])
+    monkeypatch.setattr(service, "_fetch_selectai_profile_names", lambda _name: [])
+
+    service.open_connection(
+        connection_id="aidemo-test",
+        sqlcl_connection_name="aidemo",
+        display_name="aidemo-test",
+    )
+
+    result = service.load_node(
+        connection_id="aidemo-test",
+        sqlcl_connection_name="aidemo",
+        node_id="selectai",
+        node_type="selectai_root",
+    )
+
+    assert result["success"] is True
+    assert result["fromCache"] is False
+    assert result["node"]["loaded"] is True
+    assert result["node"]["children"] == []
+
+
+def test_fetch_selectai_profile_names_returns_empty_on_missing_view(tmp_path: Path, monkeypatch) -> None:
+    service = _service(tmp_path)
+
+    def _raise_missing_view(*_args, **_kwargs):
+        raise RuntimeError("ORA-00942: table or view does not exist")
+
+    monkeypatch.setattr(metadata_service_module, "run_sqlcl_json", _raise_missing_view)
+
+    assert service._fetch_selectai_profile_names("aidemo") == []
 
 
 def test_open_connection_with_cache_probes_only_without_refresh(tmp_path: Path, monkeypatch) -> None:

@@ -30,6 +30,7 @@ Public API (used by webui/api/routes/ws.py)
 from __future__ import annotations
 
 import json
+from functools import wraps
 from typing import Any, Awaitable, Callable
 
 from loguru import logger
@@ -253,6 +254,11 @@ def apply() -> None:
     """
     from nanobot.agent.runner import AgentRunSpec
     from nanobot.agent.subagent import SubagentManager, _SubagentHook
+    from nanobot.agent.tools.context import (
+        RequestContext,
+        bind_request_context,
+        reset_request_context,
+    )
     from nanobot.bus.events import OutboundMessage
     from nanobot.security.workspace_access import bind_workspace_scope, reset_workspace_scope
 
@@ -298,10 +304,12 @@ def apply() -> None:
         label: str,
         origin: dict[str, str],
         status: Any = None,
+        runtime: Any = None,
         origin_message_id: str | None = None,
-        temperature: float | None = None,
         workspace_scope: Any = None,
-    ) -> None:
+        *,
+        announce: bool = True,
+    ) -> str:
         """Augmented _run_subagent that stays compatible with the current runtime."""
 
         channel = origin.get("channel", "")
@@ -356,20 +364,26 @@ def apply() -> None:
                 if self._llm_wall_timeout_for_session
                 else None
             )
+            request_token = bind_request_context(RequestContext(
+                channel=channel,
+                chat_id=chat_id,
+                message_id=origin_message_id,
+                session_key=sess_key,
+                runtime=runtime,
+            ))
             token = bind_workspace_scope(workspace_scope) if workspace_scope is not None else None
             try:
                 result = await self.runner.run(AgentRunSpec(
                     initial_messages=messages,
                     tools=tools,
-                    model=self.model,
-                    temperature=temperature,
+                    runtime=runtime,
                     max_iterations=self.max_iterations,
                     max_tool_result_chars=self.max_tool_result_chars,
                     hook=_WebUISubagentHook(task_id, status, _emit_progress),
                     max_iterations_message=_NO_FINAL_RESPONSE_TEXT,
                     finalize_on_max_iterations=False,
                     error_message=None,
-                    fail_on_tool_error=True,
+                    fail_on_tool_error=self.fail_on_tool_error,
                     checkpoint_callback=_on_checkpoint,
                     session_key=sess_key,
                     workspace=root,
@@ -378,6 +392,7 @@ def apply() -> None:
             finally:
                 if token is not None:
                     reset_workspace_scope(token)
+                reset_request_context(request_token)
             messages = list(result.messages)
             if status is not None:
                 status.phase = "done"
@@ -422,15 +437,17 @@ def apply() -> None:
                         pass
 
             # Call _announce_result — our patch below handles web vs non-web routing.
-            await self._announce_result(
-                task_id,
-                label,
-                task,
-                enriched_result or final_result,
-                origin,
-                announce_status,
-                origin_message_id,
-            )
+            if announce:
+                await self._announce_result(
+                    task_id,
+                    label,
+                    task,
+                    enriched_result or final_result,
+                    origin,
+                    announce_status,
+                    origin_message_id,
+                )
+            return enriched_result or final_result
 
         except Exception as e:
             error_msg = f"Error: {e}"
@@ -438,9 +455,11 @@ def apply() -> None:
             if status is not None:
                 status.phase = "error"
                 status.error = str(e)
-            await self._announce_result(
-                task_id, label, task, error_msg, origin, "error", origin_message_id,
-            )
+            if announce:
+                await self._announce_result(
+                    task_id, label, task, error_msg, origin, "error", origin_message_id,
+                )
+            return error_msg
 
     # -----------------------------------------------------------------------
     # Patch 2: _announce_result — for web channel, bypass the bus (which goes
@@ -527,6 +546,7 @@ def apply() -> None:
         from nanobot.agent.loop import AgentLoop
         _original_loop_init = AgentLoop.__init__
 
+        @wraps(_original_loop_init)
         def _agent_loop_init_patched(self, *args, **kwargs) -> None:  # type: ignore[override]
             _original_loop_init(self, *args, **kwargs)
             self.subagents._session_manager = self.sessions  # type: ignore[attr-defined]

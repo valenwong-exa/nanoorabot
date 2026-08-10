@@ -4,6 +4,7 @@ from webui.api.database_metadata.metadata_sql import (
     build_dynamic_views_query,
     build_folder_query,
     build_plsql_source_object_sql,
+    build_selectai_profiles_sql,
     build_source_object_quick_ddl_sql,
     build_table_quick_ddl_sql,
 )
@@ -14,6 +15,15 @@ def test_build_all_users_sql_uses_clob_compatible_empty_fallback() -> None:
 
     assert "from all_users" in sql
     assert "to_clob('[]')" in sql
+
+
+def test_build_selectai_profiles_sql_uses_safe_q_quote_delimiter() -> None:
+    sql = build_selectai_profiles_sql()
+
+    assert "from user_cloud_ai_profiles" in sql
+    assert "to_clob('[]')" in sql
+    assert "execute immediate q'~" in sql
+    assert "~' into l_json;" in sql
 
 
 def test_build_folder_query_aliases_inline_view_for_tables() -> None:

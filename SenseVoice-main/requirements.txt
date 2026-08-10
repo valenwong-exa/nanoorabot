@@ -1,0 +1,14 @@
+-i https://mirrors.aliyun.com/pypi/simple/
+--trusted-host mirrors.aliyun.com
+
+torch>=2.3,<2.4
+torchaudio>=2.3,<2.4
+modelscope
+huggingface
+huggingface_hub
+funasr>=1.1.3
+numpy<=1.26.4
+gradio
+fastapi>=0.111.1
+sounddevice
+pynput

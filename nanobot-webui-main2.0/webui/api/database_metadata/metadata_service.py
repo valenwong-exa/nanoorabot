@@ -22,6 +22,7 @@ from .metadata_sql import (
     build_dynamic_views_query,
     build_folder_query,
     build_plsql_source_object_sql,
+    build_selectai_profiles_sql,
     build_source_object_quick_ddl_sql,
     build_table_quick_ddl_sql,
     folder_specs_for_node,
@@ -435,6 +436,8 @@ class DatabaseMetadataService:
         if not isinstance(metadata, dict):
             metadata = {}
         metadata["last_refreshed_at"] = refreshed_at
+        if node_type == "selectai_root":
+            metadata["profileListLoaded"] = True
         node["metadata"] = metadata
         payload["connection"]["updated_at"] = refreshed_at
         write_cache(connection_id, payload, self._cache_base_dir)
@@ -562,6 +565,15 @@ class DatabaseMetadataService:
                                 connected_schema=connected_schema,
                                 path=f"{connection_path}/DBOps",
                             ),
+                            metadata={"schemaName": connected_schema},
+                        ),
+                        self._make_node(
+                            node_id="selectai",
+                            label="SelectAI",
+                            node_type="selectai_root",
+                            path=f"{connection_path}/SelectAI",
+                            children=[],
+                            loaded=False,
                             metadata={"schemaName": connected_schema},
                         ),
                         self._make_node(
@@ -706,6 +718,24 @@ class DatabaseMetadataService:
                 dbops_root_metadata = {}
             dbops_root_metadata["schemaName"] = schema_name
             dbops_root["metadata"] = dbops_root_metadata
+        selectai_root = existing_by_type.get("selectai_root")
+        if selectai_root is None:
+            selectai_root = self._make_node(
+                node_id="selectai",
+                label="SelectAI",
+                node_type="selectai_root",
+                path=f"{connection_path}/SelectAI",
+                children=[],
+                metadata={"schemaName": schema_name},
+            )
+        else:
+            selectai_root_metadata = selectai_root.get("metadata")
+            if not isinstance(selectai_root_metadata, dict):
+                selectai_root_metadata = {}
+            selectai_root_metadata["schemaName"] = schema_name
+            selectai_root["metadata"] = selectai_root_metadata
+            if not selectai_root_metadata.get("profileListLoaded") and not selectai_root.get("children"):
+                selectai_root["loaded"] = False
         dbops_existing_children = [
             child for child in (dbops_root.get("children") or []) if isinstance(child, dict)
         ]
@@ -747,11 +777,12 @@ class DatabaseMetadataService:
         ]
 
         ordered_children: list[dict[str, Any]] = []
-        for child_type in ("connection_info", "connected_schema", "dbops_root", "schemas_root"):
+        for child_type in ("connection_info", "connected_schema", "dbops_root", "selectai_root", "schemas_root"):
             child = {
                 "connection_info": existing_by_type.get("connection_info"),
                 "connected_schema": connected_schema_node,
                 "dbops_root": dbops_root,
+                "selectai_root": selectai_root,
                 "schemas_root": schemas_root,
             }[child_type]
             if child is not None:
@@ -913,6 +944,8 @@ class DatabaseMetadataService:
                     path=f"{path}/{connected_schema}",
                 )
             ]
+        if node_type == "selectai_root":
+            return self._build_selectai_profile_children(node=node, sqlcl_connection_name=sqlcl_connection_name)
         if node_type == "users_root":
             path = str((node.get("metadata") or {}).get("nodePath") or node["label"])
             return [
@@ -1061,6 +1094,26 @@ class DatabaseMetadataService:
             for item in items
         ]
 
+    def _build_selectai_profile_children(
+        self,
+        *,
+        node: dict[str, Any],
+        sqlcl_connection_name: str,
+    ) -> list[dict[str, Any]]:
+        parent_path = str((node.get("metadata") or {}).get("nodePath") or node.get("label") or node.get("id"))
+        profile_names = self._fetch_selectai_profile_names(sqlcl_connection_name)
+        return [
+            self._make_node(
+                node_id=f"selectai:profile:{profile_name}",
+                label=profile_name,
+                node_type="selectai_profile",
+                path=f"{parent_path}/{profile_name}",
+                children=[],
+                metadata={"profileName": profile_name},
+            )
+            for profile_name in profile_names
+        ]
+
     def _build_dictionary_table_children(
         self,
         *,
@@ -1124,6 +1177,28 @@ class DatabaseMetadataService:
             configured_views,
             operation="metadata_dynamic_views",
         )
+
+    def _fetch_selectai_profile_names(self, sqlcl_connection_name: str) -> list[str]:
+        try:
+            payload = run_sqlcl_json(
+                sqlcl_connection_name,
+                build_selectai_profiles_sql(),
+                operation="metadata_selectai_profiles",
+            )
+        except RuntimeError as exc:
+            detail = str(exc)
+            if "ORA-00942" in detail or "table or view does not exist" in detail.lower():
+                return []
+            raise
+        if not isinstance(payload, list):
+            raise RuntimeError("Unexpected SQLcl payload for SelectAI profiles")
+        profile_names: list[str] = []
+        for row in payload:
+            if isinstance(row, dict) and isinstance(row.get("name"), str):
+                profile_name = row["name"].strip()
+                if profile_name:
+                    profile_names.append(profile_name)
+        return list(dict.fromkeys(profile_names))
 
     def _fetch_accessible_object_names(
         self,

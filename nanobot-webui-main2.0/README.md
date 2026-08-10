@@ -74,6 +74,8 @@ Provides a full-featured UI to configure, converse with, and manage your nanobot
 pip install nanobot-webui
 ```
 
+The default installation only includes the dependencies required for `nanobot` and the WebUI. Voice recognition dependencies are intentionally excluded. If you want to enable voice later, see `INSTALL_voice.md`.
+
 > **Upgrading from an older version?** Uninstall both packages first to avoid conflicts:
 > ```bash
 > pip uninstall -y nanobot-webui nanobot
@@ -103,6 +105,8 @@ Open **http://localhost:18780** — default credentials: **admin / nanobot** —
 ```bash
 uv tool install nanobot-webui
 ```
+
+This default path also excludes the optional voice stack. Install voice support separately later if needed. See `INSTALL_voice.md`.
 
 > **Upgrading?**
 > ```bash
@@ -490,4 +494,3 @@ nanobot-webui/
 | Theme | next-themes (light / dark / system) |
 | Real-time | WebSocket (`/ws/chat`) |
 | Package manager | Bun |
-

@@ -60,6 +60,11 @@ class DatabaseOpenProbeResponse(BaseModel):
     message: str
 
 
+class HostInventoryUpdateRequest(BaseModel):
+    database_inventory: list[dict[str, Any]]
+    host_inventory: list[dict[str, Any]]
+
+
 def _inventory_path_for_workspace(workspace: Path) -> Path:
     return workspace / INVENTORY_RELATIVE_PATH
 
@@ -124,6 +129,124 @@ def _write_inventory_payload(inventory_path: Path, payload: dict[str, Any]) -> N
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+
+
+def _validate_inventory_update(body: HostInventoryUpdateRequest) -> None:
+    database_connections: set[str] = set()
+    for index, database in enumerate(body.database_inventory):
+        connection_name = str(database.get("sqlcl_saveconnname", "")).strip()
+        database_name = str(database.get("database_name", "")).strip()
+        if not connection_name or not database_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"database_inventory[{index}] requires sqlcl_saveconnname and database_name",
+            )
+        if connection_name in database_connections:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Duplicate sqlcl_saveconnname: {connection_name}",
+            )
+        database_connections.add(connection_name)
+
+    host_names: set[str] = set()
+    for index, host in enumerate(body.host_inventory):
+        host_name = str(host.get("host_name", "")).strip()
+        if (
+            not host_name
+            or not str(host.get("ip", "")).strip()
+            or not str(host.get("ssh_key", "")).strip()
+            or not str(host.get("default_user", "")).strip()
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"host_inventory[{index}] requires host_name, ip, ssh_key, "
+                    "and default_user"
+                ),
+            )
+        if host_name in host_names:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Duplicate host_name: {host_name}",
+            )
+        host_names.add(host_name)
+
+        aliases = host.get("aliases", [])
+        databases = host.get("databases", [])
+        if not isinstance(aliases, list) or not all(isinstance(alias, str) for alias in aliases):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"host_inventory[{index}].aliases must be a list of strings",
+            )
+        if not isinstance(databases, list):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"host_inventory[{index}].databases must be a list",
+            )
+        for database_index, database in enumerate(databases):
+            if not isinstance(database, dict) or not str(database.get("database_name", "")).strip():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"host_inventory[{index}].databases[{database_index}] "
+                        "requires database_name"
+                    ),
+                )
+
+
+def _preserve_inventory_runtime_fields(
+    payload: dict[str, Any],
+    body: HostInventoryUpdateRequest,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    current_databases = {
+        str(item.get("sqlcl_saveconnname", "")).strip(): item
+        for item in payload.get("database_inventory", [])
+        if isinstance(item, dict)
+    }
+    databases: list[dict[str, Any]] = []
+    for item in body.database_inventory:
+        updated = dict(item)
+        for field in ("database_status", "last_checked_at", "probe_output"):
+            updated.pop(field, None)
+        current = current_databases.get(str(updated.get("sqlcl_saveconnname", "")).strip())
+        if current is not None:
+            for field in ("database_status", "last_checked_at", "probe_output"):
+                if field in current:
+                    updated[field] = current[field]
+        databases.append(updated)
+
+    current_hosts = {
+        str(item.get("host_name", "")).strip(): item
+        for item in payload.get("host_inventory", [])
+        if isinstance(item, dict)
+    }
+    hosts: list[dict[str, Any]] = []
+    for item in body.host_inventory:
+        updated = dict(item)
+        updated.pop("host_status", None)
+        current_host = current_hosts.get(str(updated.get("host_name", "")).strip())
+        if current_host is not None and "host_status" in current_host:
+            updated["host_status"] = current_host["host_status"]
+
+        current_host_databases = {
+            str(database.get("database_name", "")).strip(): database
+            for database in (current_host or {}).get("databases", [])
+            if isinstance(database, dict)
+        }
+        updated_databases: list[dict[str, Any]] = []
+        for database in updated.get("databases", []):
+            database_updated = dict(database)
+            database_updated.pop("database_status", None)
+            current_database = current_host_databases.get(
+                str(database_updated.get("database_name", "")).strip()
+            )
+            if current_database is not None and "database_status" in current_database:
+                database_updated["database_status"] = current_database["database_status"]
+            updated_databases.append(database_updated)
+        updated["databases"] = updated_databases
+        hosts.append(updated)
+
+    return databases, hosts
 
 
 async def _run_command(command: list[str], timeout: float) -> bool:
@@ -570,6 +693,42 @@ async def get_host_inventory(
         return _missing_inventory_response(workspace, inventory_path)
 
     payload = _load_inventory_payload(inventory_path)
+    return _build_inventory_response(
+        workspace,
+        inventory_path,
+        _normalise_hosts(payload),
+        _normalise_database_inventory(payload),
+    )
+
+
+@router.put("/inventory")
+async def put_host_inventory(
+    request: Request,
+    body: HostInventoryUpdateRequest,
+    _user: Annotated[dict, Depends(get_current_user)],
+    svc: Annotated[ServiceContainer, Depends(get_services)],
+) -> dict[str, Any]:
+    refresh_job = _get_refresh_job(request)
+    if refresh_job is not None and refresh_job.snapshot().isRunning:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Host inventory is being refreshed; try saving again after the refresh finishes",
+        )
+
+    _validate_inventory_update(body)
+    workspace = _current_workspace(svc)
+    inventory_path = _inventory_path_for_workspace(workspace)
+    if not inventory_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Linux inventory file does not exist",
+        )
+
+    payload = _load_inventory_payload(inventory_path)
+    database_inventory, host_inventory = _preserve_inventory_runtime_fields(payload, body)
+    payload["database_inventory"] = database_inventory
+    payload["host_inventory"] = host_inventory
+    _write_inventory_payload(inventory_path, payload)
     return _build_inventory_response(
         workspace,
         inventory_path,

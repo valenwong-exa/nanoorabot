@@ -61,8 +61,11 @@ const LARGE_FOLDER_TYPES = new Set([
   "java_objects_folder",
   "scheduler_jobs_folder",
 ]);
+const FILTERABLE_NODE_TYPES = new Set([...LARGE_FOLDER_TYPES, "selectai_root"]);
 const FORCE_INTERNAL_ICON_NODE_TYPES = new Set([
   "dbops_root",
+  "selectai_root",
+  "selectai_profile",
   "table",
   "index",
   "view",
@@ -88,6 +91,7 @@ const FORCE_INTERNAL_ICON_NODE_TYPES = new Set([
 ]);
 const REFRESHABLE_NODE_TYPES = new Set([
   "dbops_root",
+  "selectai_root",
   "schemas_root",
   "schema",
   "users_root",
@@ -267,7 +271,10 @@ function getNodeIcon(nodeType: string): LucideIcon {
       return Database;
     case "connected_schema":
     case "dbops_root":
+    case "selectai_root":
       return Wrench;
+    case "selectai_profile":
+      return User;
     case "schemas_root":
     case "schema":
     case "users_root":
@@ -382,12 +389,81 @@ function isObjectNamePathNode(node: MetadataTreeNode): boolean {
   return node.type === "dynamic_view" || node.type === "dictionary_table_item";
 }
 
+function canCopyNodePath(node: MetadataTreeNode): boolean {
+  return node.type !== "dynamic_view" && node.type !== "dictionary_table_item";
+}
+
 function formatNodePathsForCopy(
   nodes: MetadataTreeNode[],
   sqlclConnectionName?: string | null,
   displayName?: string | null,
 ): string {
   const connectionName = sqlclConnectionName?.trim() || "unknown";
+  if (nodes.length === 1 && isSelectAiProfileNode(nodes[0])) {
+    const profileName =
+      typeof nodes[0].metadata?.profileName === "string" && nodes[0].metadata.profileName.trim()
+        ? nodes[0].metadata.profileName.trim()
+        : nodes[0].label.trim();
+    const escapedProfileName = profileName.replace(/'/g, "''");
+    return [
+      `Use oracle sqlcl MCP tool to connect to database ${connectionName} check profile via`,
+      "```sql",
+      "with",
+      "p as (",
+      "  select profile_id,",
+      "         dbms_lob.substr(description, 800, 1) as description,",
+      "         profile_name,",
+      "         status,",
+      "         created,",
+      "         last_modified",
+      "  from   user_cloud_ai_profiles",
+      `  where  profile_name = '${escapedProfileName}'`,
+      "),",
+      "a as (",
+      "  select profile_name,",
+      "         attribute_name,",
+      "         dbms_lob.substr(attribute_value, 700, 1) as attribute_value",
+      "  from   user_cloud_ai_profile_attributes",
+      `  where  profile_name = '${escapedProfileName}'`,
+      "),",
+      "attr_txt as (",
+      "  select rtrim(",
+      "           xmlcast(",
+      "             xmlagg(",
+      "               xmlelement(",
+      "                 e,",
+      "                 attribute_name || '=' ||",
+      "                 case",
+      "                   when regexp_like(attribute_name, 'PASSWORD|SECRET|TOKEN|KEY|CREDENTIAL', 'i')",
+      "                   then '[MASKED]'",
+      "                   else replace(replace(attribute_value, chr(10), ' '), chr(13), ' ')",
+      "                 end || chr(10)",
+      "               )",
+      "               order by attribute_name",
+      "             ) as clob",
+      "           ),",
+      "           chr(10)",
+      "         ) as attributes",
+      "  from a",
+      "),",
+      "txt as (",
+      "  select",
+      "    'PROFILE_NAME='  || p.profile_name || chr(10) ||",
+      "    'DESCRIPTION='   || replace(replace(p.description, chr(10), ' '), chr(13), ' ') || chr(10) ||",
+      "    'PROFILE_ID='    || p.profile_id   || chr(10) ||",
+      "    'STATUS='        || p.status       || chr(10) ||",
+      "    'CREATED='       || to_char(p.created, 'yyyy-mm-dd hh24:mi:ss') || chr(10) ||",
+      "    'LAST_MODIFIED=' || to_char(p.last_modified, 'yyyy-mm-dd hh24:mi:ss') || chr(10) ||",
+      "    '---- ATTRIBUTES ----' || chr(10) ||",
+      "    nvl(dbms_lob.substr(attr_txt.attributes, 2200, 1), 'NO ATTRIBUTES FOUND') as report_text",
+      "  from p",
+      "  cross join attr_txt",
+      ")",
+      "select substrb(report_text, 1, 4000) as profile_report",
+      "from   txt;",
+      "```",
+    ].join("\n");
+  }
   if (nodes.length > 0 && nodes.every((node) => isObjectNamePathNode(node))) {
     const objectNames = nodes.map((node) => node.label.trim()).filter(Boolean);
     return `Please use oracle sqlcl MCP tool to connect to database ${connectionName}. This is a development task. Use the local metadata or code cache in the workspace when available, and only fetch additional database metadata when needed. Current targets: ${objectNames.join(", ")}. Make the requested changes, then compile or validate affected objects if needed.`;
@@ -431,12 +507,33 @@ function formatNodeNamePromptForCopy(
   displayName?: string | null,
 ): string {
   const connectionName = sqlclConnectionName?.trim() || "unknown";
+  const objectName =
+    typeof node.metadata?.objectName === "string" && node.metadata.objectName.trim()
+      ? node.metadata.objectName.trim()
+      : node.label.trim();
+  if (isSelectAiProfileNode(node)) {
+    const profileName =
+      typeof node.metadata?.profileName === "string" && node.metadata.profileName.trim()
+        ? node.metadata.profileName.trim()
+        : node.label.trim();
+    return `SelectAI profile ${profileName}(can check it via sqlcl mcp connect to ${connectionName}, \`\`\`sql select profile_name from user_cloud_ai_profiles \`\`\`)`;
+  }
+  if (node.type === "dictionary_table_item") {
+    return `Connect to "${connectionName}" via the SQLcl MCP tool. Check the Dictionary View: ${objectName}. Use the command "DESC ${objectName}" only if needed, and do not show me the definition unless I ask for it.`;
+  }
+  if (node.type === "dynamic_view") {
+    return `Connect to "${connectionName}" via the SQLcl MCP tool. Check the Dynamic Performance View: ${objectName}. Use the command "DESC ${objectName}" only if needed, and do not show me the definition unless I ask for it.`;
+  }
   const relativePath = getRelativeNodePath(node, displayName).replace(/^\/+/, "") || node.label.trim() || "/";
   return `Please use oracle sqlcl MCP tool to connect to database ${connectionName}. Current object path: ${relativePath}. For follow-up requests, unless another object is specified, treat this path as the current object context.`;
 }
 
 function isSqlCopyNode(node: MetadataTreeNode): boolean {
   return node.type === "useful_diagnosis" && typeof node.metadata?.sqlText === "string";
+}
+
+function isSelectAiProfileNode(node: MetadataTreeNode): boolean {
+  return node.type === "selectai_profile";
 }
 
 function formatDiagnosisSqlForCopy(node: MetadataTreeNode, sqlclConnectionName?: string | null): string {
@@ -562,6 +659,22 @@ function formatSelectedCodeOnly(selectedText: string): string {
   return selectedText.trim();
 }
 
+function formatSelectAiProfilePrompt(
+  node: MetadataTreeNode,
+  sqlclConnectionName?: string | null,
+): string {
+  const connectionName = sqlclConnectionName?.trim() || "unknown";
+  const profileName =
+    typeof node.metadata?.profileName === "string" && node.metadata.profileName.trim()
+      ? node.metadata.profileName.trim()
+      : node.label.trim();
+  const escapedProfileName = profileName.replace(/'/g, "''");
+  return [
+    `Please use the Oracle SQLcl MCP tool to connect to database ${connectionName}.`,
+    `Set the current Select AI profile by executing: EXEC DBMS_CLOUD_AI.SET_PROFILE('${escapedProfileName}')`,
+  ].join("\n\n");
+}
+
 function findParentNode(tree: MetadataTreeNode, targetNodeId: string): MetadataTreeNode | null {
   for (const child of tree.children ?? []) {
     if (child.id === targetNodeId) {
@@ -588,12 +701,12 @@ function collectVisibleTreeRows(
     if (expandedNodeIds.has(node.id)) {
       const rawChildren = node.children ?? [];
       const filterText = folderFilters.get(node.id)?.trim().toLowerCase() ?? "";
-      const supportsLargeFolderControls = LARGE_FOLDER_TYPES.has(node.type);
-      const shouldRenderControls = supportsLargeFolderControls;
+      const supportsFilterControls = FILTERABLE_NODE_TYPES.has(node.type);
+      const shouldRenderControls = supportsFilterControls && (rawChildren.length > 0 || filterText.length > 0);
       const filteredChildren = shouldRenderControls
         ? rawChildren.filter((child) => child.label.toLowerCase().includes(filterText))
         : rawChildren;
-      const visibleChildrenCount = shouldRenderControls
+      const visibleChildrenCount = LARGE_FOLDER_TYPES.has(node.type)
         ? Math.min(filteredChildren.length, folderVisibleCounts.get(node.id) ?? LARGE_FOLDER_PAGE_SIZE)
         : filteredChildren.length;
 
@@ -1302,6 +1415,7 @@ export function DatabaseMetadataTree({
   const contextTableNode = contextMenu ? isTableNode(contextMenu.node) : false;
   const contextSourceDdlNode = contextMenu ? isSourceDdlNode(contextMenu.node) : false;
   const contextNodeDdlEnabled = contextTableNode || contextSourceDdlNode;
+  const contextCanCopyNodePath = contextMenu ? canCopyNodePath(contextMenu.node) : false;
 
   return (
     <div className={cn("relative flex h-full min-h-0 flex-col", className)}>
@@ -1385,6 +1499,19 @@ export function DatabaseMetadataTree({
           className="fixed z-50 min-w-[160px] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
+          {isSelectAiProfileNode(contextMenu.node) ? (
+            <button
+              type="button"
+              onClick={() =>
+                void handleCopy(formatSelectAiProfilePrompt(contextMenu.node, sqlclConnectionName), "selectai profile", {
+                  addAsSnippet: true,
+                })
+              }
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+            >
+              <span>{t("chat.setSelectAiProfile")}</span>
+            </button>
+          ) : null}
           <button
             type="button"
             disabled={!contextRefreshTarget && !contextNodeDdlEnabled}
@@ -1453,21 +1580,27 @@ export function DatabaseMetadataTree({
               >
                 <span>Copy Name</span>
               </button>
-              <button
-                type="button"
-                onClick={() =>
-                  void handleCopy(
-                    formatNodePathsForCopy(resolveNodesForCopy(contextMenu.node), sqlclConnectionName, displayName),
-                    selectedNodeIds.has(contextMenu.node.id) && selectedNodes.length > 1 ? "node paths" : "node path",
-                    { addAsSnippet: true },
-                  )
-                }
-                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
-              >
-                <span>
-                  {selectedNodeIds.has(contextMenu.node.id) && selectedNodes.length > 1 ? "Copy Node Paths" : "Copy Node Path"}
-                </span>
-              </button>
+              {contextCanCopyNodePath ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void handleCopy(
+                      formatNodePathsForCopy(resolveNodesForCopy(contextMenu.node), sqlclConnectionName, displayName),
+                      selectedNodeIds.has(contextMenu.node.id) && selectedNodes.length > 1 ? "node paths" : "node path",
+                      { addAsSnippet: true },
+                    )
+                  }
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+                >
+                  <span>
+                    {isSelectAiProfileNode(contextMenu.node)
+                      ? t("chat.checkSelectAiConfig")
+                      : selectedNodeIds.has(contextMenu.node.id) && selectedNodes.length > 1
+                        ? "Copy Node Paths"
+                        : "Copy Node Path"}
+                  </span>
+                </button>
+              ) : null}
             </>
           )}
         </div>

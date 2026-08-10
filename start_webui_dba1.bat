@@ -8,7 +8,7 @@ set "WEB=%WEBUI_ROOT%\web"
 set "WEB_DIST=%WEB%\dist"
 set "SERVER_WEB=%WEBUI_ROOT%\webui\web"
 set "SERVER_DIST=%SERVER_WEB%\dist"
-set "NANOBOT_ROOT=%ROOT%\nanobot-main2.2"
+set "NANOBOT_ROOT=%ROOT%\nanobot-main3.0"
 set "CONFIG=%ROOT%\runtime\config.webui.json"
 set "ORACLE_CONFIG=%ROOT%\runtime\oracle_config.json"
 set "TOOL_POLICY=%ROOT%\runtime\tool_policy.json"
@@ -24,7 +24,7 @@ if not defined WORKSPACE (
     )
 )
 if not defined PORT set "PORT=18780"
-set "PYTHON_EXE=%NANOBOT_ROOT%\.venv\Scripts\python.exe"
+if not defined PYTHON_EXE set "PYTHON_EXE=%WEBUI_ROOT%\.venv\Scripts\python.exe"
 
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 call :log "==== start_webui_dba1 ===="
@@ -48,7 +48,7 @@ if not exist "%SERVER_WEB%" (
 )
 
 if not exist "%NANOBOT_ROOT%" (
-    echo nanobot-main2.2 root not found: "%NANOBOT_ROOT%"
+    echo nanobot-main3.0 root not found: "%NANOBOT_ROOT%"
     goto :error
 )
 
@@ -117,7 +117,8 @@ echo --oracle-audit --oracle-memory not enabled.
 call :log "[4/4] Starting WebUI"
 call :log "NANOBOT_ROOT=%NANOBOT_ROOT%"
 cd /d "%WEBUI_ROOT%"
-start "AI System Agent WebUI 2.2" cmd /d /k ""%PYTHON_EXE%" -m webui --host 0.0.0.0 --port %PORT% --workspace "%WORKSPACE%" --config "%CONFIG%" --log-level DEBUG --oracle-config "%ORACLE_CONFIG%" --tool-policy "%TOOL_POLICY%" 
+set "PYTHONPATH=%NANOBOT_ROOT%;%PYTHONPATH%"
+start "AI System Agent WebUI 3.0" cmd /d /k ""%PYTHON_EXE%" -m webui --host 0.0.0.0 --port %PORT% --workspace "%WORKSPACE%" --config "%CONFIG%" --log-level DEBUG --oracle-config "%ORACLE_CONFIG%" --tool-policy "%TOOL_POLICY%"
 set "PORT_READY="
 for /l %%I in (1,1,15) do (
     timeout /t 1 /nobreak >nul
@@ -132,7 +133,7 @@ if not defined PORT_READY (
     call :log "WebUI is not listening on port %PORT% after 15 seconds"
     echo WebUI did not start successfully. Check logs:
     echo   "%START_LOG%"
-    echo   and the visible "AI System Agent WebUI 2.2" console window.
+    echo   and the visible "AI System Agent WebUI 3.0" console window.
     goto :error
 )
 

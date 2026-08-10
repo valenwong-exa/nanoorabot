@@ -4,7 +4,7 @@ Defense 页面开发说明
 一、背景
 --------
 本次开发的目标，是让 WebUI 可以维护危险命令策略文件
-`dangerous_tool_policy.json`，并让该策略在 agent 的 tool 执行前真正生效。
+`runtime/tool_policy.json`，并让该策略在 agent 的 tool 执行前真正生效。
 
 核心目标分为两部分：
 
@@ -16,14 +16,15 @@ Defense 页面开发说明
 ----------------
 
 1. Defense 页面从静态演示页，改为真实可维护策略文件的页面
-   - 页面现在会通过后端 API 读取 `dangerous_tool_policy.json`
+   - 页面现在会通过后端 API 读取启动参数 `--tool-policy` 指向的策略文件
+   - 当前正式启动脚本使用 `runtime/tool_policy.json`
    - 支持新增、编辑、删除规则
    - 支持保存回 JSON 文件
 
 2. 新增启动参数 `--tool-policy`
    - WebUI 启动时可通过该参数传入策略文件路径
    - 例如：
-     `--tool-policy E:\nanobot-main\nanobot-webui-main2.0\runtime\dangerous_tool_policy.json`
+     `--tool-policy E:\nanobot-main\nanobot-webui-main2.0\runtime\tool_policy.json`
 
 3. 新增后端策略读写服务
    - WebUI 后端增加了 tool policy 的服务和 API
@@ -42,7 +43,7 @@ Defense 页面开发说明
    - 包括 block、warn、等待授权、取消执行等提示
 
 
-三、dangerous_tool_policy.json 结构
+三、tool_policy.json 结构
 -----------------------------------
 
 当前每条规则主要字段如下：
@@ -163,19 +164,22 @@ Defense 页面开发说明
 
 后端 WebUI：
 - `webui/tool_policy.py`
+- `webui/legacy_tool_policy.py`
+- `webui/legacy_tool_policy_hook.py`
 - `webui/api/routes/tool_policy.py`
 - `webui/api/models.py`
 - `webui/__main__.py`
 - `webui/cli.py`
 - `start_webui_dba1.bat`
 
-Agent 执行侧：
-- `nanobot/agent/tool_policy.py`
-- `nanobot/agent/runner.py`
-- `nanobot/agent/loop.py`
+main3 Agent 执行侧：
+- `nanobot-main3.0/nanobot/agent/hook.py`
+- `nanobot-main3.0/nanobot/agent/turn_hooks.py`
+- `nanobot-main3.0/nanobot/agent/runner.py`
+- `nanobot-main3.0/nanobot/agent/loop.py`
 
 策略文件：
-- `runtime/dangerous_tool_policy.json`
+- `runtime/tool_policy.json`
 
 测试：
 - `tests/agent/test_tool_policy_guard.py`
@@ -217,7 +221,7 @@ Agent 执行侧：
 
 本次开发已经完成两件关键事情：
 
-1. `Defense` 页面可以真实维护 `dangerous_tool_policy.json`
+1. `Defense` 页面可以真实维护启动参数指定的 `tool_policy.json`
 2. 策略已经真正进入 agent 的 tool 执行链路，可以对危险命令做 block 或 warn
 
 这意味着：
@@ -225,3 +229,70 @@ Agent 执行侧：
 - 页面维护的规则，不再只是展示
 - 修改 JSON 后，可以真正影响危险命令的执行行为
 
+
+十一、main3 兼容层回归案例：规则存在但未拦截
+----------------------------------------------
+
+### 1. 故障现象
+
+Defense 页面和 `runtime/tool_policy.json` 中均存在：
+
+`truncate table -> literal -> block`
+
+但 Agent 仍通过 SQLCL MCP 工具执行了：
+
+`truncate table VALEN.TEST1;`
+
+### 2. 排查结论
+
+规则内容、大小写归一化、SQLCL 工具参数均没有问题。使用实际参数直接调用
+`DangerousToolPolicy.evaluate()` 时，可以正确得到 `action=block`。
+
+真正的问题发生在 WebUI 启动顺序中：
+
+1. `webui.__main__` 首先执行 `webui.patches.apply_all()`
+2. `mcp_dynamic.py` 和 `subagent.py` 都会包装 `AgentLoop.__init__`
+3. 旧包装函数没有使用 `functools.wraps`，运行时签名退化为 `(self, *args, **kwargs)`
+4. `_agentloop_supports_init_kwarg()` 只查找显式的 `hook_factories` 参数
+5. 能力检测错误返回 `False`
+6. `LegacyToolPolicyHook` 没有注册到 main3 的 turn hook 链
+7. MCP 工具因此绕过策略并直接执行
+
+注意：Defense 页面只负责读取和保存策略。真正的安全边界位于
+`LegacyToolPolicyHook.before_execute_tool()`；页面显示有规则并不能证明运行中的 Agent
+已经安装该 Hook。
+
+### 3. 修复方式
+
+本项目同时采用两层修复：
+
+1. 所有包装 `AgentLoop.__init__` 的 monkey patch 使用 `functools.wraps`，保留原始签名和
+   `__wrapped__` 链。
+2. `_agentloop_supports_init_kwarg()` 除了识别显式参数，也把 `**kwargs`
+   （`inspect.Parameter.VAR_KEYWORD`）视为支持该关键字，防止未来新增包装器时再次静默关闭安全 Hook。
+
+不要只做其中一层：保留签名方便调试和反射，`**kwargs` 兜底则负责兼容未来补丁。
+
+### 4. 回归测试
+
+`tests/agent/test_tool_policy_guard.py` 必须覆盖以下三点：
+
+1. 按真实 WebUI 导入顺序应用所有 monkey patch 后，`AgentLoop.__init__` 仍能识别
+   `hook_factories`。
+2. 仅暴露 `**kwargs` 的未来包装器不会让能力检测返回 `False`。
+3. 工具名为 `mcp_oracle-sqlcl_run-sql`，参数包含
+   `{"sql": "truncate table VALEN.TEST1;"}` 时，Hook 在工具执行前抛出 block 异常。
+
+修改 AgentLoop 构造函数、WebUI patch 顺序、Hook 工厂或 SQLCL MCP 适配时，都应运行：
+
+`python -m pytest -q tests/agent/test_tool_policy_guard.py`
+
+同时建议运行相关 main3 兼容测试：
+
+`python -m pytest -q tests/test_webui_cron_delivery.py tests/test_subagent_patch_websocket.py`
+
+### 5. 部署注意事项
+
+策略 Hook 在 AgentLoop 创建时注册。修改 Python 代码后必须重启 WebUI；仅刷新浏览器不会让
+已经运行的 AgentLoop 获得新 Hook。策略 JSON 本身支持按文件修改时间重新加载，无需为每次
+规则编辑重启服务。

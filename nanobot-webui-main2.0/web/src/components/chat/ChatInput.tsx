@@ -9,8 +9,11 @@ import { cn } from "../../lib/utils";
 import { uploadFile } from "../../hooks/useConfig";
 import { useSkills } from "../../hooks/useSkills";
 import { useMCPServers } from "../../hooks/useMCP";
+import { useVoiceHealth, useVoiceTranscription } from "../../hooks/useVoice";
+import { BrowserVoiceRecorder } from "../../lib/voiceRecorder";
 import { useChatStore, type DraftSnippet } from "../../stores/chatStore";
 import { SkillPickerPanel, type ToolPickerItem } from "./SkillPickerPanel";
+import { stripHiddenPrompts } from "../../lib/hiddenPrompts";
 
 const MODEL_IMAGE_EXTENSIONS = new Set([
   ".jpeg",
@@ -35,10 +38,18 @@ const MODEL_IMAGE_EXTENSIONS = new Set([
 
 const MODEL_IMAGE_ACCEPT = Array.from(MODEL_IMAGE_EXTENSIONS).join(",");
 const MAX_SNIPPET_VISIBLE_ROWS = 6;
+const MAX_VOICE_RECORDING_MS = 10_000;
+const VOICE_COMMAND_PROMPT =
+  "以下是用户的语音命令，可能有识别误差；若不清楚请继续确认，优先用选择题，让用户用 YES/NO 或 1/2/3 回答。";
 
 function isModelImageFile(name: string): boolean {
   const lower = name.toLowerCase();
   return Array.from(MODEL_IMAGE_EXTENSIONS).some((ext) => lower.endsWith(ext));
+}
+
+function formatVoiceRecordingClock(durationMs: number): string {
+  const totalSeconds = Math.max(0, Math.min(Math.floor(durationMs / 1000), MAX_VOICE_RECORDING_MS / 1000));
+  return `00:${String(totalSeconds).padStart(2, "0")}`;
 }
 
 interface Attachment {
@@ -58,7 +69,7 @@ function revokePreviewUrl(url?: string) {
 }
 
 interface ChatInputProps {
-  onSend: (content: string, media?: string[]) => void;
+  onSend: (content: string, media?: string[], options?: { displayContent?: string; hiddenPrompts?: string[] }) => void;
   disabled?: boolean;
   onStop?: () => void;
   isWaiting?: boolean;
@@ -108,7 +119,11 @@ export function ChatInput({
   const { t } = useTranslation();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isVoiceOverlayOpen, setIsVoiceOverlayOpen] = useState(false);
+  const [voiceMode, setVoiceMode] = useState<"idle" | "recording" | "transcribing">("idle");
+  const [voiceRecordingElapsedMs, setVoiceRecordingElapsedMs] = useState(0);
   const [snippetContextMenu, setSnippetContextMenu] = useState<SnippetContextMenuState | null>(null);
+  const [hoveredSnippetId, setHoveredSnippetId] = useState<string | null>(null);
+  const [focusedSnippetId, setFocusedSnippetId] = useState<string | null>(null);
   const [skillPanelDismissed, setSkillPanelDismissed] = useState(false);
   const [showEnabledOnly, setShowEnabledOnly] = useState(true);
   const [showAvailableOnly, setShowAvailableOnly] = useState(true);
@@ -118,6 +133,8 @@ export function ChatInput({
   const previousSnippetCountRef = useRef(0);
   const skillPanelRef = useRef<HTMLDivElement>(null);
   const lastHandledAutoSendTokenRef = useRef(0);
+  const voiceRecorderRef = useRef<BrowserVoiceRecorder | null>(null);
+  const voiceRecordingStartedAtRef = useRef<number | null>(null);
   const currentSessionKey = useChatStore((s) => s.currentSessionKey);
   const draftSelection = useChatStore((s) =>
     s.currentSessionKey ? s.draftSelections[s.currentSessionKey] : undefined,
@@ -138,6 +155,8 @@ export function ChatInput({
   const updateDraftSnippet = useChatStore((s) => s.updateDraftSnippet);
   const removeDraftSnippet = useChatStore((s) => s.removeDraftSnippet);
   const clearDraftSnippets = useChatStore((s) => s.clearDraftSnippets);
+  const { data: voiceHealth } = useVoiceHealth();
+  const voiceTranscriptionMutation = useVoiceTranscription();
   const { data: skills = [], isLoading: skillsLoading } = useSkills();
   const { data: mcpServers = [], isLoading: mcpLoading } = useMCPServers();
   const toolItems = useMemo<ToolPickerItem[]>(
@@ -254,11 +273,145 @@ export function ChatInput({
   };
 
   const isUploading = attachments.some((a) => a.uploading);
+  const isVoiceBusy = voiceMode !== "idle";
+  const isVoiceAvailable = voiceHealth?.ok ?? false;
+  const voiceUnavailableReason = voiceHealth?.reason ?? t("chat.voice.unavailable");
+
+  const getVoiceErrorMessage = useCallback(
+    (err: unknown, fallbackKey: string) =>
+      (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+      t(fallbackKey),
+    [t],
+  );
+
+  const appendVoiceTextToDraft = useCallback(
+    (text: string) => {
+      const normalized = text.trim();
+      if (!normalized) {
+        return;
+      }
+
+      const state = useChatStore.getState();
+      const sessionKey = currentSessionKey ?? state.currentSessionKey ?? undefined;
+      const currentValue = sessionKey ? (state.draftMessages[sessionKey] ?? "") : "";
+      const nextValue = currentValue.trim()
+        ? `${currentValue.replace(/\s+$/, "")}\n${normalized}`
+        : normalized;
+      const cursor = nextValue.length;
+
+      setDraftMessage(nextValue, sessionKey);
+      setDraftSelection(cursor, cursor, sessionKey);
+      window.requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (!el) {
+          return;
+        }
+        el.focus();
+        el.setSelectionRange(cursor, cursor);
+      });
+    },
+    [currentSessionKey, setDraftMessage, setDraftSelection],
+  );
+
+  const ensureVoiceCommandPrompt = useCallback(() => {
+    if (snippets.some((snippet) => snippet.text.trim() === VOICE_COMMAND_PROMPT)) {
+      return;
+    }
+    addDraftSnippet(VOICE_COMMAND_PROMPT, currentSessionKey ?? undefined);
+  }, [addDraftSnippet, currentSessionKey, snippets]);
+
+  const cancelVoiceRecording = useCallback(async () => {
+    const recorder = voiceRecorderRef.current;
+    voiceRecorderRef.current = null;
+    voiceRecordingStartedAtRef.current = null;
+    setVoiceRecordingElapsedMs(0);
+    if (recorder) {
+      await recorder.cancel().catch(() => undefined);
+    }
+    setVoiceMode("idle");
+  }, []);
+
+  const finishVoiceRecording = useCallback(async () => {
+    const recorder = voiceRecorderRef.current;
+    voiceRecorderRef.current = null;
+    voiceRecordingStartedAtRef.current = null;
+    setVoiceRecordingElapsedMs(0);
+    if (!recorder) {
+      setVoiceMode("idle");
+      return;
+    }
+
+    setVoiceMode("transcribing");
+    try {
+      const recording = await recorder.stop();
+      if (recording.blob.size === 0 || recording.durationMs <= 0) {
+        toast.error(t("chat.voice.empty"));
+        return;
+      }
+
+      const file = new File([recording.blob], `voice-${Date.now()}.wav`, {
+        type: "audio/wav",
+      });
+      const result = await voiceTranscriptionMutation.mutateAsync({
+        file,
+        language: "zh",
+        device: "cuda:0",
+      });
+
+      if (!result.text.trim()) {
+        toast.error(t("chat.voice.empty"));
+        return;
+      }
+
+      ensureVoiceCommandPrompt();
+      appendVoiceTextToDraft(result.text);
+    } catch (err: unknown) {
+      toast.error(getVoiceErrorMessage(err, "chat.voice.transcriptionFailed"));
+    } finally {
+      setVoiceMode("idle");
+    }
+  }, [appendVoiceTextToDraft, ensureVoiceCommandPrompt, getVoiceErrorMessage, t, voiceTranscriptionMutation]);
+
+  const openVoiceOverlay = useCallback(async () => {
+    if (!isVoiceAvailable) {
+      toast.error(voiceUnavailableReason);
+      return;
+    }
+    if (isVoiceBusy || isWaiting || (!isWaiting && disabled)) {
+      return;
+    }
+
+    setIsVoiceOverlayOpen(true);
+    setVoiceMode("recording");
+    setVoiceRecordingElapsedMs(0);
+    const recorder = new BrowserVoiceRecorder({ targetSampleRate: 16000 });
+    try {
+      await recorder.start();
+      voiceRecordingStartedAtRef.current = Date.now();
+      voiceRecorderRef.current = recorder;
+    } catch (err: unknown) {
+      voiceRecordingStartedAtRef.current = null;
+      setVoiceRecordingElapsedMs(0);
+      setIsVoiceOverlayOpen(false);
+      setVoiceMode("idle");
+      toast.error(getVoiceErrorMessage(err, "chat.voice.startFailed"));
+    }
+  }, [disabled, getVoiceErrorMessage, isVoiceAvailable, isVoiceBusy, isWaiting, voiceUnavailableReason]);
+
+  const closeVoiceOverlay = useCallback(async () => {
+    if (!isVoiceOverlayOpen) {
+      return;
+    }
+    setIsVoiceOverlayOpen(false);
+    await finishVoiceRecording();
+  }, [finishVoiceRecording, isVoiceOverlayOpen]);
 
   const handleSend = useCallback(() => {
     const composedDraft = composeDraftContent(snippets, value);
     const readyAttachments = attachments.filter((a) => a.url && !a.uploading);
     if ((!composedDraft && readyAttachments.length === 0) || disabled || isUploading) return;
+    const hiddenPrompts = snippets.map((snippet) => snippet.text.trim()).filter(Boolean);
+    const displayContent = stripHiddenPrompts(composedDraft, hiddenPrompts);
 
     const media = readyAttachments
       .filter((a) => a.sendAsMedia && a.localPath)
@@ -272,7 +425,7 @@ export function ChatInput({
       }
     }
 
-    onSend(content.trim(), media);
+    onSend(content.trim(), media, { displayContent, hiddenPrompts });
     setDraftMessage("", currentSessionKey ?? undefined);
     setDraftSelection(0, 0, currentSessionKey ?? undefined);
     clearDraftSnippets(currentSessionKey ?? undefined);
@@ -349,16 +502,79 @@ export function ChatInput({
   );
 
   useEffect(() => {
-    if (!isVoiceOverlayOpen) return;
+    if (!isVoiceOverlayOpen || voiceMode !== "recording") return;
 
     const timer = window.setTimeout(() => {
-      setIsVoiceOverlayOpen(false);
-    }, 15000);
+      void closeVoiceOverlay();
+    }, MAX_VOICE_RECORDING_MS);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [isVoiceOverlayOpen]);
+  }, [closeVoiceOverlay, isVoiceOverlayOpen, voiceMode]);
+
+  useEffect(() => {
+    if (!isVoiceOverlayOpen || voiceMode !== "recording") {
+      return;
+    }
+
+    const tick = () => {
+      if (!voiceRecordingStartedAtRef.current) {
+        setVoiceRecordingElapsedMs(0);
+        return;
+      }
+      setVoiceRecordingElapsedMs(Date.now() - voiceRecordingStartedAtRef.current);
+    };
+
+    tick();
+    const timer = window.setInterval(tick, 200);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [isVoiceOverlayOpen, voiceMode]);
+
+  useEffect(() => {
+    const handleVoiceOverlayShortcut = (event: KeyboardEvent) => {
+      if (event.repeat) {
+        return;
+      }
+      if (isVoiceOverlayOpen) {
+        void closeVoiceOverlay();
+        return;
+      }
+      if (
+        isVoiceAvailable &&
+        !isVoiceBusy &&
+        event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        event.key.toLowerCase() === "z"
+      ) {
+        event.preventDefault();
+        void openVoiceOverlay();
+      }
+    };
+
+    window.addEventListener("keydown", handleVoiceOverlayShortcut);
+    return () => {
+      window.removeEventListener("keydown", handleVoiceOverlayShortcut);
+    };
+  }, [closeVoiceOverlay, isVoiceAvailable, isVoiceBusy, isVoiceOverlayOpen, openVoiceOverlay]);
+
+  useEffect(() => {
+    if (!isVoiceOverlayOpen) {
+      return;
+    }
+
+    const handlePointerDown = () => {
+      void closeVoiceOverlay();
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [closeVoiceOverlay, isVoiceOverlayOpen]);
 
   useEffect(() => {
     lastHandledAutoSendTokenRef.current = 0;
@@ -457,16 +673,21 @@ export function ChatInput({
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      void cancelVoiceRecording();
+    };
+  }, [cancelVoiceRecording]);
+
   return (
     <>
       {isVoiceOverlayOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/72 backdrop-blur-sm">
-          <button
-            type="button"
-            onClick={() => setIsVoiceOverlayOpen(false)}
-            className="flex min-h-[240px] w-[min(88vw,360px)] flex-col items-center justify-center gap-5 rounded-3xl border border-border bg-background/95 px-8 py-10 text-center shadow-2xl transition-transform hover:scale-[1.01]"
-            aria-label="关闭语音输入提示"
-            title="点击关闭"
+          <div
+            className="flex min-h-[240px] w-[min(88vw,360px)] flex-col items-center justify-center gap-5 rounded-3xl border border-border bg-background/95 px-8 py-10 text-center shadow-2xl transition-transform"
+            role="dialog"
+            aria-modal="true"
+            aria-label="语音输入提示"
           >
             <img
               src="/microphone-speaking.svg"
@@ -474,14 +695,25 @@ export function ChatInput({
               className="h-24 w-24 object-contain"
             />
             <div className="flex items-end justify-center text-xl font-medium text-foreground">
-              <span>请说话</span>
+              <span>{voiceMode === "transcribing" ? t("chat.voice.transcribing") : t("chat.voice.speakNow")}</span>
               <span className="ml-1 inline-flex w-6 justify-start text-primary">
                 <span className="animate-bounce [animation-delay:0ms]">.</span>
                 <span className="animate-bounce [animation-delay:180ms]">.</span>
                 <span className="animate-bounce [animation-delay:360ms]">.</span>
               </span>
             </div>
-          </button>
+            <div className="text-sm text-muted-foreground">
+              {voiceMode === "transcribing" ? t("chat.voice.transcribingHint") : t("chat.voice.stopHint")}
+            </div>
+            {voiceMode === "recording" ? (
+              <div className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+                {t("chat.voice.recordingTimer", {
+                  elapsed: formatVoiceRecordingClock(voiceRecordingElapsedMs),
+                  max: formatVoiceRecordingClock(MAX_VOICE_RECORDING_MS),
+                })}
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
       <div className="px-4 pb-4 pt-2">
@@ -559,11 +791,18 @@ export function ChatInput({
           {snippets.length > 0 && (
             <div className="flex flex-col gap-2 px-4 pt-3">
               {snippets.map((snippet) => (
-                <div
-                  key={snippet.id}
-                  className="rounded-xl border border-emerald-400/80 bg-emerald-50/80 shadow-sm transition dark:border-emerald-700 dark:bg-emerald-950/20"
-                >
-                  {parseToolPromptSnippet(snippet.text) ? (
+                (() => {
+                  const isExpanded = hoveredSnippetId === snippet.id || focusedSnippetId === snippet.id;
+                  return (
+                    <div
+                      key={snippet.id}
+                      onMouseEnter={() => setHoveredSnippetId(snippet.id)}
+                      onMouseLeave={() =>
+                        setHoveredSnippetId((current) => (current === snippet.id ? null : current))
+                      }
+                      className="rounded-xl border border-emerald-400/80 bg-emerald-50/80 shadow-sm transition dark:border-emerald-700 dark:bg-emerald-950/20"
+                    >
+                      {parseToolPromptSnippet(snippet.text) ? (
                     <div className="flex flex-wrap items-center gap-2 border-b border-emerald-300/70 px-3 py-2 dark:border-emerald-800/70">
                       <span className="rounded-full border border-emerald-500/70 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-200">
                         {parseToolPromptSnippet(snippet.text)?.kind}
@@ -573,27 +812,40 @@ export function ChatInput({
                       </span>
                     </div>
                   ) : null}
-                  <textarea
-                    value={snippet.text}
-                    rows={Math.min(MAX_SNIPPET_VISIBLE_ROWS, Math.max(1, snippet.text.split(/\r?\n/).length))}
-                    onChange={(event) => {
-                      updateDraftSnippet(snippet.id, event.target.value, currentSessionKey ?? undefined);
-                      if (snippetContextMenu?.snippetId === snippet.id && event.target.value.length === 0) {
-                        setSnippetContextMenu(null);
-                      }
-                    }}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      setSnippetContextMenu({
-                        snippetId: snippet.id,
-                        x: event.clientX,
-                        y: event.clientY,
-                      });
-                    }}
-                    placeholder="Copied node path prompt"
-                    className="min-h-[44px] max-h-40 w-full resize-none overflow-y-auto rounded-xl border-0 bg-transparent px-3 py-2 text-sm leading-relaxed text-emerald-950 outline-none transition focus:ring-2 focus:ring-emerald-200 dark:text-emerald-100 dark:focus:ring-emerald-900"
-                  />
-                </div>
+                      <textarea
+                        value={snippet.text}
+                        rows={
+                          isExpanded
+                            ? Math.min(MAX_SNIPPET_VISIBLE_ROWS, Math.max(1, snippet.text.split(/\r?\n/).length))
+                            : 1
+                        }
+                        onFocus={() => setFocusedSnippetId(snippet.id)}
+                        onBlur={() =>
+                          setFocusedSnippetId((current) => (current === snippet.id ? null : current))
+                        }
+                        onChange={(event) => {
+                          updateDraftSnippet(snippet.id, event.target.value, currentSessionKey ?? undefined);
+                          if (snippetContextMenu?.snippetId === snippet.id && event.target.value.length === 0) {
+                            setSnippetContextMenu(null);
+                          }
+                        }}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          setSnippetContextMenu({
+                            snippetId: snippet.id,
+                            x: event.clientX,
+                            y: event.clientY,
+                          });
+                        }}
+                        placeholder="Copied node path prompt"
+                        className={cn(
+                          "w-full resize-none rounded-xl border-0 bg-transparent px-3 py-2 text-sm leading-relaxed text-emerald-950 outline-none transition focus:ring-2 focus:ring-emerald-200 dark:text-emerald-100 dark:focus:ring-emerald-900",
+                          isExpanded ? "min-h-[44px] max-h-40 overflow-y-auto" : "h-10 overflow-hidden whitespace-nowrap",
+                        )}
+                      />
+                    </div>
+                  );
+                })()
               ))}
             </div>
           )}
@@ -613,15 +865,22 @@ export function ChatInput({
                 />
               </div>
             ) : null}
-            <button
-              type="button"
-              onClick={() => setIsVoiceOverlayOpen(true)}
-              className="absolute left-3 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:bg-muted/70 hover:text-foreground"
-              aria-label="语音输入"
-              title="语音输入"
-            >
-              <img src="/microphone-.svg" alt="" className="h-4 w-4 opacity-80" />
-            </button>
+            {isVoiceAvailable ? (
+              <button
+                type="button"
+                onClick={() => void openVoiceOverlay()}
+                className="absolute left-3 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:bg-muted/70 hover:text-foreground"
+                aria-label="语音输入"
+                title="语音输入"
+                disabled={isVoiceBusy || isWaiting || (!isWaiting && disabled)}
+              >
+                {voiceMode === "transcribing" ? (
+                  <Loader2 className="h-4 w-4 animate-spin opacity-80" />
+                ) : (
+                  <img src="/microphone-.svg" alt="" className="h-4 w-4 opacity-80" />
+                )}
+              </button>
+            ) : null}
             <Textarea
               ref={textareaRef}
               value={value}
@@ -633,7 +892,10 @@ export function ChatInput({
               onKeyUp={syncSelection}
               placeholder={t("chat.placeholder")}
               rows={1}
-              className="resize-none border-0 bg-transparent pl-14 pr-4 py-3.5 shadow-none focus-visible:ring-0 text-base leading-relaxed w-full"
+              className={cn(
+                "resize-none border-0 bg-transparent pr-4 py-3.5 shadow-none focus-visible:ring-0 text-base leading-relaxed w-full",
+                isVoiceAvailable ? "pl-14" : "pl-4",
+              )}
               disabled={!isWaiting && disabled}
             />
           </div>

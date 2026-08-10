@@ -6,9 +6,12 @@ export interface HostDatabase {
   sqlcl_saveconnname?: string;
   database_version: string;
   database_status?: string;
+  oracle_home?: string;
+  pdb?: string;
 }
 
 export interface MonitoredDatabaseInventoryItem {
+  description?: string;
   database_name: string;
   sqlcl_saveconnname?: string;
   database_version?: string;
@@ -19,6 +22,7 @@ export interface MonitoredDatabaseInventoryItem {
 
 export interface HostInventoryItem {
   host_name: string;
+  description?: string;
   aliases: string[];
   ip: string;
   ssh_key: string;
@@ -51,6 +55,11 @@ export interface HostInventoryRefreshConfigInput {
   intervalMinutes?: number;
 }
 
+export interface HostInventoryUpdateInput {
+  database_inventory: MonitoredDatabaseInventoryItem[];
+  host_inventory: HostInventoryItem[];
+}
+
 export interface OpenMonitoredDatabaseInput {
   sqlcl_saveconnname: string;
   database_name?: string;
@@ -78,6 +87,12 @@ export function useHostInventory(options?: { refetchInterval?: number | false })
 export function useRefreshHostInventory() {
   return useMutation<HostInventoryResponse>({
     mutationFn: () => api.post("/hosts/inventory/refresh").then((r) => r.data),
+  });
+}
+
+export function useUpdateHostInventory() {
+  return useMutation<HostInventoryResponse, unknown, HostInventoryUpdateInput>({
+    mutationFn: (data) => api.put("/hosts/inventory", data).then((r) => r.data),
   });
 }
 

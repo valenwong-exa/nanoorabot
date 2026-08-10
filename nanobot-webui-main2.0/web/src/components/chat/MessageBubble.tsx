@@ -335,9 +335,17 @@ export function MessageBubble({ message, onRevoke, artifactOnly }: MessageBubble
   const user = useAuthStore((s) => s.user);
   const userMediaPaths = message.role === "user" ? (message.mediaPaths ?? []) : [];
   const hasUserMediaPreview = userMediaPaths.length > 0;
+  const userHiddenPrompts = message.hiddenPrompts ?? [];
+  const hasUserHiddenPrompts = message.role === "user" && userHiddenPrompts.length > 0;
 
   // Don't render anything for empty/whitespace messages
-  if (!message.content?.trim() && !message.toolCalls?.length && !message.isStreaming && !hasUserMediaPreview) {
+  if (
+    !message.content?.trim() &&
+    !message.toolCalls?.length &&
+    !message.isStreaming &&
+    !hasUserMediaPreview &&
+    !hasUserHiddenPrompts
+  ) {
     return null;
   }
 
@@ -403,7 +411,9 @@ export function MessageBubble({ message, onRevoke, artifactOnly }: MessageBubble
   const parts = splitThinking(message.content ?? "");
   const [copied, setCopied] = useState(false);
   const copyContent = () => {
-    const text = message.content ?? "";
+    const text = isUser
+      ? [...userHiddenPrompts, message.content].filter((part) => part.trim().length > 0).join("\n\n")
+      : (message.content ?? "");
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
@@ -431,9 +441,31 @@ export function MessageBubble({ message, onRevoke, artifactOnly }: MessageBubble
       )}>
         {isUser ? (
           <>
-            <div className="rounded-2xl rounded-tr-sm bg-orange-200 px-4 py-2.5 text-sm leading-relaxed text-orange-900 shadow-sm dark:bg-orange-800/50 dark:text-orange-100">
-              <span className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{message.content}</span>
-            </div>
+            {userHiddenPrompts.length > 0 && (
+              <div className="flex w-full flex-col gap-2">
+                {userHiddenPrompts.map((prompt, index) => (
+                  <div
+                    key={`${message.id}:prompt:${index}`}
+                    className="group/prompt max-w-full rounded-xl border border-emerald-400/80 bg-emerald-50/80 px-3 py-2 text-left shadow-sm transition-colors dark:border-emerald-700 dark:bg-emerald-950/20"
+                  >
+                    <div
+                      className={cn(
+                        "max-h-6 overflow-hidden text-sm leading-relaxed text-emerald-950 transition-[max-height] duration-200 ease-out dark:text-emerald-100",
+                        "whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
+                        "group-hover/prompt:max-h-40 group-hover/prompt:overflow-y-auto"
+                      )}
+                    >
+                      {prompt}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {message.content.trim() ? (
+              <div className="rounded-2xl rounded-tr-sm bg-orange-200 px-4 py-2.5 text-sm leading-relaxed text-orange-900 shadow-sm dark:bg-orange-800/50 dark:text-orange-100">
+                <span className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{message.content}</span>
+              </div>
+            ) : null}
             {hasUserMediaPreview && (
               <div className="w-full space-y-1.5">
                 {userMediaPaths.map((path) => (
