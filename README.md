@@ -1,8 +1,9 @@
-# Nanoorabot - AI System Agent
+# Oracle SQL CODEX CLI - Database AI System Agent
 
-**本项目是一个基于 `nanobot` 与 `nanobot-webui` 二次开发的 AI System Agent 机器人系统，目标是构建一个能够长期运行、具备自主执行能力的智能系统管理员。**
+**本项目的主要目标是一个帮助用户使用智能体进行数据库工作**
 *This project is an AI System Agent robot system developed based on `nanobot` and `nanobot-webui`, aiming to build an intelligent system administrator capable of long-term operation and autonomous execution.*
-<img width="1258" height="225" alt="image" src="https://github.com/user-attachments/assets/8a2d39b9-a670-4660-9a3d-7d799076a824" />
+<img width="2167" height="725" alt="logo-oracle-preview" src="https://github.com/user-attachments/assets/efee34c0-be95-4e7f-afb7-ea271c7b3b39" />
+
 
 *本项目由资深DBA系统架构师创建和维护，依赖vibe coding 进行开发和维护。欢迎大家一起vide coding。
 *This project is created and maintained by a senior DBA system architect, with development powered by vibe coding. Everyone is welcome to join in and do vibe coding together.
