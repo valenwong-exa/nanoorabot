@@ -3,6 +3,18 @@
 **本项目的主要目标是一个帮助用户使用智能体进行数据库工作**
 *This project is an AI System Agent robot system developed based on `nanobot` and `nanobot-webui`, aiming to build an intelligent system administrator capable of long-term operation and autonomous execution.*
 <img width="2167" height="725" alt="logo-oracle-preview" src="https://github.com/user-attachments/assets/efee34c0-be95-4e7f-afb7-ea271c7b3b39" />
+**本项目的主要用户**
+
+## 应用开发者
+PL/SQL,SQL业务逻辑的开发和维护。请先从框架入手，然后再逐步添加特定于应用程序的技能。 提供了 PL/SQL,SQL,JAVA等技术栈的指导：连接配置、驱动程序/方言选择、数据类型映射和推荐的连接模式。框架设置完成后，再根据实际需要，深入学习应用程序开发技能，例如 JSON、空间数据、文本或连接池等方面的细节。按此顺序操作可以避免不必要的试错——在进行自定义之前，先采用经过 Oracle 验证的方案。
+## 人工智能工程师
+特性技能引入了 Oracle 的原生 AI 构建模块——用于受控 NL2SQL 的 Select AI 和 AI Profiles，以及DBMS_VECTOR用于检索和 RAG 的 AI Vector Search/。
+## 数据库管理员
+内置数百个Oracle社区SKILLs，面向用户场景进行定制。权限设计、审计，危险命令防御和加密均已经提供，而不仅仅是一句口号。
+## 迁移负责人
+迁移技能有助于评估和转换；DevOps 技能则负责交付机制，例如模式变更工作流程、在线运维、基于版本的重新定义以及测试。一次加载一个SKILL可以避免异构环境成为千篇一律的通用建议。
+
+<img width="6898" height="397" alt="image" src="https://github.com/user-attachments/assets/51eb88fe-aefd-42f3-bda6-b47988862b81" />
 
 
 *本项目由资深DBA系统架构师创建和维护，依赖vibe coding 进行开发和维护。欢迎大家一起vide coding。
